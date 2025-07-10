@@ -1,0 +1,193 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Environment variables and secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.example.local
+config/secrets.json
+secrets/
+credentials/
+
+# API Keys and Authentication
+*.pem
+*.key
+*.crt
+api-keys.json
+service-account.json
+auth-config.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Build directories
+dist/
+build/
+out/
+
+# AI/ML Specific Files
+# ==================
+
+# Model files and weights
+models/
+*.pkl
+*.h5
+*.pt
+*.pth
+*.onnx
+*.tflite
+*.pb
+*.safetensors
+checkpoints/
+weights/
+
+# Vector databases and embeddings
+vector_store/
+embeddings/
+*.index
+*.faiss
+*.pinecone
+pinecone_data/
+chroma_db/
+weaviate_data/
+
+# Training and dataset files
+datasets/
+data/raw/
+data/processed/
+training_data/
+*.csv
+*.jsonl
+*.parquet
+*.feather
+*.arrow
+
+# Cache files
+.cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+cache/
+.embeddings_cache/
+.vector_cache/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Experiment tracking
+mlruns/
+wandb/
+.neptune/
+experiments/
+runs/
+
+# LLM and AI service artifacts
+llm_cache/
+tokenizer_cache/
+huggingface_cache/
+.transformers_cache/
+anthropic_cache/
+openai_cache/
+
+# RAG specific files
+document_store/
+indexed_docs/
+chunked_docs/
+retrieval_cache/
+rag_cache/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+.vs/
+.sublime-*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Testing
+test-results/
+coverage/
+.nyc_output/
+playwright-report/
+test-output/
+
+# Monitoring and metrics
+metrics/
+monitoring/
+*.metrics
+
+# Documentation build
+docs/_build/
+site/
+
+# Local development
+.local/
+local_config.json
+dev_settings.json
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Compressed files
+*.zip
+*.rar
+*.7z
+*.tar.gz
+*.tgz
+
+# Large files (you might want to use Git LFS)
+*.bin
+*.dat
+*.dump 
