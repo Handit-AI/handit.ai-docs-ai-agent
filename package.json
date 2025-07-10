@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "validate:knowledge": "node src/scripts/validateKnowledgeBase.js",
+    "setup:pinecone": "node src/scripts/initPinecone.js",
+    "upload:knowledge": "node src/scripts/initPinecone.js"
   },
   "keywords": ["ai", "agent", "handit", "documentation", "express", "api"],
   "author": "",
@@ -18,7 +21,9 @@
     "helmet": "^7.1.0",
     "morgan": "^1.10.0",
     "axios": "^1.6.0",
-    "express-rate-limit": "^7.1.5"
+    "express-rate-limit": "^7.1.5",
+    "@pinecone-database/pinecone": "^2.0.1",
+    "openai": "^4.24.7"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
