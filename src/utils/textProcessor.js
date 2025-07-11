@@ -9,7 +9,7 @@
  * Utility class for processing and chunking text for vector storage
  * @class TextProcessor
  */
-export class TextProcessor {
+class TextProcessor {
     /**
      * Sanitize text to remove problematic Unicode characters for vector storage
      * @static
@@ -67,28 +67,56 @@ export class TextProcessor {
      * @async
      * @param {string} text - The text content to split
      * @param {Object} [options={}] - Chunking options
-     * @param {number} [options.chunkSize=1000] - Size of each chunk in characters
-     * @param {number} [options.chunkOverlap=300] - Number of characters to overlap between chunks
+     * @param {number} [options.chunkSize=3000] - Size of each chunk in characters (larger to preserve context)
+     * @param {number} [options.chunkOverlap=500] - Number of characters to overlap between chunks
      * @param {boolean} [options.preserveCodeBlocks=true] - Keep code blocks intact
      * @param {boolean} [options.preserveSections=true] - Keep sections with headers intact
      * @returns {Promise<string[]>} Array of text chunks
      * 
      * @example
      * const chunks = await TextProcessor.splitIntoChunks("Long text content", {
-     *   chunkSize: 500,
-     *   chunkOverlap: 150,
+     *   chunkSize: 3000,
+     *   chunkOverlap: 500,
      *   preserveCodeBlocks: true
      * });
      */
     static async splitIntoChunks(text, options = {}) {
-        const chunkSize = options.chunkSize || 1000;
-        const chunkOverlap = options.chunkOverlap || 300; // Increased default overlap
+        const chunkSize = options.chunkSize || 2000; // Balanced size for Pinecone compatibility 
+        const chunkOverlap = options.chunkOverlap || 300; // Balanced overlap
         const preserveCodeBlocks = options.preserveCodeBlocks !== false;
         const preserveSections = options.preserveSections !== false;
         
         // If text is smaller than chunk size, return as single chunk
         if (text.length <= chunkSize) {
             return [text];
+        }
+        
+        // First, identify and preserve code blocks completely
+        const codeBlocks = this.extractCodeBlocks(text);
+        if (codeBlocks.length > 0) {
+            return this.chunkWithCodeBlockPreservation(text, codeBlocks, chunkSize, chunkOverlap);
+        }
+        
+        // For documents with sections but no code blocks, try to keep complete sections together
+        const sectionBreaks = text.split(/\n\n(?=[A-Z#]|Step \d+|Phase \d+)/);
+        if (sectionBreaks.length > 1) {
+            const largeSections = [];
+            let currentSection = '';
+            
+            for (const section of sectionBreaks) {
+                if ((currentSection + section).length <= chunkSize * 1.5) {
+                    currentSection += (currentSection ? '\n\n' : '') + section;
+                } else {
+                    if (currentSection) largeSections.push(currentSection);
+                    currentSection = section;
+                }
+            }
+            if (currentSection) largeSections.push(currentSection);
+            
+            // If we have reasonable-sized sections, use them
+            if (largeSections.every(section => section.length >= chunkSize * 0.3)) {
+                return largeSections;
+            }
         }
         
         // Enhanced separators with priority (higher priority = earlier in array)
@@ -114,15 +142,18 @@ export class TextProcessor {
         while (currentIndex < text.length) {
             let endIndex = Math.min(currentIndex + chunkSize, text.length);
             
-            // Special handling for code blocks
+            // Special handling for code blocks - ensure we don't break them
             if (preserveCodeBlocks) {
                 const codeBlockStart = text.indexOf('```', currentIndex);
-                const codeBlockEnd = text.indexOf('```', codeBlockStart + 3);
+                const codeBlockEnd = codeBlockStart !== -1 ? text.indexOf('```', codeBlockStart + 3) : -1;
                 
-                // If we're inside a code block, try to include the whole block
-                if (codeBlockStart !== -1 && codeBlockStart < endIndex && 
-                    codeBlockEnd !== -1 && codeBlockEnd < currentIndex + chunkSize * 1.5) {
-                    endIndex = Math.min(codeBlockEnd + 3, text.length);
+                // If we're inside or about to hit a code block, include the whole block
+                if (codeBlockStart !== -1 && codeBlockStart < endIndex) {
+                    if (codeBlockEnd !== -1) {
+                        // Include the complete code block regardless of size
+                        endIndex = codeBlockEnd + 3;
+                        console.log(`📝 Preserving complete code block (${endIndex - currentIndex} chars)`);
+                    }
                 }
             }
             
@@ -218,17 +249,170 @@ export class TextProcessor {
             });
         }
         
-        // Find code blocks
+        // Find code blocks with improved detection
         const codeMatches = text.matchAll(/```[\s\S]*?```/g);
         for (const match of codeMatches) {
             context.codeBlocks.push({
                 text: match[0],
                 index: match.index,
-                end: match.index + match[0].length
+                end: match.index + match[0].length,
+                language: this.detectCodeLanguage(match[0])
             });
         }
         
         return context;
+    }
+
+    /**
+     * Extract code blocks from text with their positions
+     * @static
+     * @param {string} text - The text to analyze
+     * @returns {Array} Array of code block objects with positions
+     */
+    static extractCodeBlocks(text) {
+        const codeBlocks = [];
+        const regex = /```[\s\S]*?```/g;
+        let match;
+        
+        while ((match = regex.exec(text)) !== null) {
+            codeBlocks.push({
+                content: match[0],
+                start: match.index,
+                end: match.index + match[0].length,
+                language: this.detectCodeLanguage(match[0])
+            });
+        }
+        
+        return codeBlocks;
+    }
+
+    /**
+     * Detect programming language from code block
+     * @static
+     * @param {string} codeBlock - The code block to analyze
+     * @returns {string} Detected language or 'unknown'
+     */
+    static detectCodeLanguage(codeBlock) {
+        const firstLine = codeBlock.split('\n')[0];
+        const languageMatch = firstLine.match(/```(\w+)/);
+        return languageMatch ? languageMatch[1] : 'unknown';
+    }
+
+    /**
+     * Chunk text while preserving complete code blocks
+     * @static
+     * @param {string} text - The text to chunk
+     * @param {Array} codeBlocks - Array of code block objects
+     * @param {number} chunkSize - Target chunk size
+     * @param {number} chunkOverlap - Overlap between chunks
+     * @returns {Array} Array of text chunks with preserved code blocks
+     */
+    static chunkWithCodeBlockPreservation(text, codeBlocks, chunkSize, chunkOverlap) {
+        const chunks = [];
+        let currentIndex = 0;
+        
+        // Sort code blocks by position
+        const sortedCodeBlocks = [...codeBlocks].sort((a, b) => a.start - b.start);
+        
+        for (const codeBlock of sortedCodeBlocks) {
+            // Add text before the code block
+            if (currentIndex < codeBlock.start) {
+                const beforeCodeText = text.slice(currentIndex, codeBlock.start).trim();
+                if (beforeCodeText) {
+                    // Split the text before code block normally
+                    const beforeChunks = this.splitTextSimple(beforeCodeText, chunkSize, chunkOverlap);
+                    chunks.push(...beforeChunks);
+                }
+            }
+            
+            // Add the complete code block as its own chunk (regardless of size)
+            const codeChunk = text.slice(codeBlock.start, codeBlock.end);
+            console.log(`📝 Preserving code block: ${codeBlock.language} (${codeChunk.length} chars)`);
+            chunks.push(codeChunk);
+            
+            currentIndex = codeBlock.end;
+        }
+        
+        // Add remaining text after the last code block
+        if (currentIndex < text.length) {
+            const remainingText = text.slice(currentIndex).trim();
+            if (remainingText) {
+                const remainingChunks = this.splitTextSimple(remainingText, chunkSize, chunkOverlap);
+                chunks.push(...remainingChunks);
+            }
+        }
+        
+        return chunks.filter(chunk => chunk && chunk.trim().length > 0);
+    }
+
+    /**
+     * Simple text splitting without code block considerations
+     * @static
+     * @param {string} text - Text to split
+     * @param {number} chunkSize - Target chunk size
+     * @param {number} chunkOverlap - Overlap between chunks
+     * @returns {Array} Array of text chunks
+     */
+    static splitTextSimple(text, chunkSize, chunkOverlap) {
+        if (text.length <= chunkSize) {
+            return [text];
+        }
+        
+        const chunks = [];
+        let currentIndex = 0;
+        
+        while (currentIndex < text.length) {
+            let endIndex = Math.min(currentIndex + chunkSize, text.length);
+            
+            // Find a good breaking point
+            if (endIndex < text.length) {
+                const breakPoint = this.findBreakPoint(text, currentIndex, endIndex);
+                if (breakPoint > currentIndex) {
+                    endIndex = breakPoint;
+                }
+            }
+            
+            const chunk = text.slice(currentIndex, endIndex).trim();
+            if (chunk) {
+                chunks.push(chunk);
+            }
+            
+            currentIndex = Math.max(currentIndex + 1, endIndex - chunkOverlap);
+        }
+        
+        return chunks;
+    }
+
+    /**
+     * Find optimal breaking point for text
+     * @static
+     * @param {string} text - The text
+     * @param {number} start - Start index
+     * @param {number} end - End index
+     * @returns {number} Optimal break point
+     */
+    static findBreakPoint(text, start, end) {
+        const searchArea = text.slice(start, end);
+        
+        // Look for paragraph breaks first
+        const paragraphBreak = searchArea.lastIndexOf('\n\n');
+        if (paragraphBreak > searchArea.length * 0.5) {
+            return start + paragraphBreak + 2;
+        }
+        
+        // Look for sentence endings
+        const sentenceEnd = searchArea.lastIndexOf('. ');
+        if (sentenceEnd > searchArea.length * 0.7) {
+            return start + sentenceEnd + 2;
+        }
+        
+        // Look for line breaks
+        const lineBreak = searchArea.lastIndexOf('\n');
+        if (lineBreak > searchArea.length * 0.8) {
+            return start + lineBreak + 1;
+        }
+        
+        return end;
     }
 
     /**
@@ -254,10 +438,10 @@ export class TextProcessor {
          // Extract contextual information
          const contextInfo = this.extractContextualInfo(sanitizedText);
          
-         // Split into chunks with intelligent context preservation
+         // Split into chunks with intelligent context preservation (balanced size)
          const chunks = await this.splitIntoChunks(sanitizedText, {
-             chunkSize: options.chunkSize || 1000,
-             chunkOverlap: options.chunkOverlap || 300,
+             chunkSize: options.chunkSize || 2000, // Balanced size for Pinecone limits
+             chunkOverlap: options.chunkOverlap || 300, // Reasonable overlap
              preserveCodeBlocks: true,
              preserveSections: true
          });
@@ -283,6 +467,10 @@ export class TextProcessor {
             const hasCodeBlocks = contextInfo.codeBlocks
                 .some(block => block.index >= chunkStart && block.end <= chunkEnd);
             
+            // Check if this chunk IS a code block
+            const isCodeBlock = contextInfo.codeBlocks
+                .some(block => Math.abs(block.index - chunkStart) < 10 && Math.abs(block.end - chunkEnd) < 10);
+            
             // Enhanced metadata with context information
             const enhancedMetadata = {
                 ...document.metadata,
@@ -297,6 +485,8 @@ export class TextProcessor {
                 
                 // Content type detection
                 contentType: this.detectContentType(chunk),
+                isCodeBlock: isCodeBlock,
+                codeLanguage: isCodeBlock ? this.detectCodeLanguage(chunk) : null,
                 
                 // Quality indicators
                 isComplete: this.isCompleteSection(chunk),
@@ -346,4 +536,7 @@ export class TextProcessor {
         
         return endsWithPunctuation && hasCompleteCodeBlocks && !hasIncompleteLists;
     }
-} 
+}
+
+// Export for CommonJS
+module.exports = { TextProcessor }; 

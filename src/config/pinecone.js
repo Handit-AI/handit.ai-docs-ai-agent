@@ -5,29 +5,41 @@
  * @requires dotenv
  */
 
-import { Pinecone } from '@pinecone-database/pinecone';
-import dotenv from 'dotenv';
+const { Pinecone } = require('@pinecone-database/pinecone');
+const dotenv = require('dotenv');
 
 dotenv.config();
 
 /**
- * Initialize Pinecone client and index
+ * Initialize Pinecone client and index with namespace support
  * @async
  * @function initializePinecone
- * @returns {Promise<Object>} Object containing Pinecone client and index
+ * @returns {Promise<Object>} Object containing Pinecone client, index, and namespace
  * @throws {Error} If initialization fails
  */
-export const initializePinecone = async () => {
+const initializePinecone = async () => {
     const client = new Pinecone({ 
         apiKey: process.env.PINECONE_API_KEY,
     });
     
     try {
-        const index = client.index(process.env.PINECONE_INDEX);
+        const indexName = process.env.PINECONE_INDEX;
+        const namespace = process.env.PINECONE_NAMESPACE || 'HANDIT';
+        
+        // Get index instance
+        const baseIndex = client.index(indexName);
+        
+        // Get namespaced index
+        const index = baseIndex.namespace(namespace);
+        
+        console.log(`🔌 Connected to Pinecone index: ${indexName} with namespace: ${namespace}`);
         
         return {
             client,
-            index
+            index,
+            baseIndex,
+            namespace,
+            indexName
         };
     } catch (error) {
         console.error('❌ Error initializing Pinecone:', error);
@@ -44,7 +56,7 @@ export const initializePinecone = async () => {
  * @property {string} metadata.intent - Expected user intent
  * @property {string} metadata.topic - Specific topic
  */
-export const handitKnowledgeBase = [
+const handitKnowledgeBase = [
     {
         text: `Handit.ai Overview
 
@@ -694,4 +706,9 @@ Your AI system now automatically monitors itself, evaluates its performance, and
             phase: "complete"
         }
     }
-]; 
+];
+
+module.exports = {
+    initializePinecone,
+    handitKnowledgeBase
+}; 

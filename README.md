@@ -1,628 +1,490 @@
-# Handit.ai Advanced Documentation AI Agent 🤖
+# Handit.ai Docs AI Agent
 
-State-of-the-art AI-powered backend for intelligent documentation assistance using LLMs, vector search, and RAG techniques.
-
-## 📋 Description
-
-This project is an advanced Express.js server that provides a REST API for a sophisticated artificial intelligence agent specialized in answering questions about Handit.ai documentation. The system leverages cutting-edge AI technologies including Large Language Models (LLMs), Pinecone vector database for semantic search, Retrieval-Augmented Generation (RAG) techniques, and self-improving capabilities through continuous learning.
+Professional multi-node agentic system for Handit.ai documentation assistance. Automatically detects user language and context to provide precise solutions.
 
 ## 🚀 Features
 
-### 🧠 **Advanced AI Technologies**
-- ✅ **Large Language Models (LLMs)** for natural language understanding and generation
-- ✅ **Pinecone Vector Database** for high-performance semantic similarity search
-- ✅ **RAG (Retrieval-Augmented Generation)** pipeline for context-aware responses
-- ✅ **Self-improving capabilities** through continuous learning and feedback loops
-- ✅ **Real-time vector indexing** and document embedding
+### Multi-Node Agentic System
+- **4-Node LLM Architecture**: Context Analysis → Intent Planning → Knowledge Synthesis → Response Generation
+- **Automatic Language Detection**: Responds in user's detected language (Spanish/English)
+- **Pinecone RAG Integration**: Semantic search through Handit.ai documentation
+- **Conversation History**: Persistent conversations with PostgreSQL
+- **Unlimited Response Length**: No token limits on final responses
 
-### 🔧 **Core Infrastructure**
-- ✅ **REST API** built with Express.js and comprehensive middleware
-- ✅ **Multi-language support** (Spanish/English) with LLM-powered translation
-- ✅ **Advanced input validation** and sanitization
-- ✅ **Rate limiting** with intelligent abuse prevention
-- ✅ **Comprehensive logging** and performance monitoring
-- ✅ **Robust error handling** with detailed error classification
-- ✅ **Health check endpoints** for all AI services
-- ✅ **Auto-generated API documentation** with OpenAPI/Swagger integration
+### Advanced Technologies
+- **RAG (Retrieval-Augmented Generation)**: Semantic search with Pinecone vector database
+- **Multi-LLM Processing**: OpenAI GPT with specialized prompts for each node
+- **Conversation Management**: PostgreSQL-based conversation persistence
+- **Complete Logging**: All intermediate LLM responses included in API response
 
-### 🎯 **AI Capabilities**
-- ✅ **Semantic search** across entire Handit.ai documentation
-- ✅ **Context-aware question answering** with confidence scoring
-- ✅ **Code example generation** and technical explanation
-- ✅ **Query understanding** and automatic decomposition
-- ✅ **Source attribution** and reference linking
-- ✅ **Performance optimization** through caching and model tuning
-
-## 🛠️ Installation
+## 📋 Complete Setup Instructions
 
 ### Prerequisites
 
-- **Node.js 18.0.0 or higher** with npm or yarn
-- **Pinecone account** for vector database services
-- **LLM API access** (OpenAI, Anthropic, or Hugging Face)
-- **Minimum 4GB RAM** for optimal performance
-- **Internet connection** for AI service APIs
+Before starting, you need:
+- **Node.js 18+** - [Download here](https://nodejs.org/)
+- **PostgreSQL 12+** - [Download here](https://www.postgresql.org/download/)
+- **OpenAI API Key** - [Get it here](https://platform.openai.com/api-keys)
+- **Pinecone Account** - [Sign up here](https://www.pinecone.io/)
 
-### Installation Steps
+### Step 1: Clone and Install
 
-1. **Clone the repository**
-   ```bash
-   git clone <your-repo-url>
-   cd handit.ai-docs-ai-agent
-   ```
+```bash
+# 1. Clone the repository
+git clone https://github.com/handit-ai/docs-ai-agent.git
+cd docs-ai-agent
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Configure environment variables**
-   ```bash
-   cp env.example .env
-   ```
-   
-   Edit the `.env` file with your AI service configurations:
-   ```env
-   # Server Configuration
-   PORT=3000
-   NODE_ENV=development
-   
-   # Handit.ai Documentation
-   HANDIT_DOCS_URL=https://docs.handit.ai
-   
-   # Rate Limiting
-   RATE_LIMIT_WINDOW_MS=900000
-   RATE_LIMIT_MAX_REQUESTS=100
-   
-   # LLM Configuration
-   LLM_PROVIDER=openai  # openai, anthropic, huggingface
-   OPENAI_API_KEY=your_openai_api_key
-   ANTHROPIC_API_KEY=your_anthropic_api_key
-   HUGGINGFACE_API_KEY=your_huggingface_api_key
-   
-   # Pinecone Vector Database
-   PINECONE_API_KEY=your_pinecone_api_key
-   PINECONE_ENVIRONMENT=your_pinecone_environment
-   PINECONE_INDEX_NAME=handit-docs-index
-   PINECONE_NAMESPACE=documentation
-   
-   # RAG Configuration
-   EMBEDDING_MODEL=text-embedding-ada-002
-   CHUNK_SIZE=1000
-   CHUNK_OVERLAP=200
-   MAX_RETRIEVAL_DOCS=5
-   
-   # Self-Improvement
-   FEEDBACK_COLLECTION=enabled
-   MODEL_FINE_TUNING=enabled
-   PERFORMANCE_MONITORING=enabled
-   ```
-
-4. **Initialize Vector Database**
-   ```bash
-   npm run setup:vectordb
-   ```
-
-5. **Index Documentation (First time setup)**
-   ```bash
-   npm run index:docs
-   ```
-
-6. **Start the server**
-   
-   **Development (with auto-reload):**
-   ```bash
-   npm run dev
-   ```
-   
-   **Production:**
-   ```bash
-   npm start
-   ```
-
-7. **Verify AI Services**
-   ```bash
-   curl http://localhost:3000/api/ai/health
-   ```
-
-## 📝 API Usage
-
-### Available Endpoints
-
-#### 1. Health Check
+# 2. Install dependencies
+npm install
 ```
-GET /api/health
-```
-Verifies the server status.
 
-**Example response:**
-```json
-{
-  "status": "OK",
-  "timestamp": "2024-01-15T10:30:00.000Z",
-  "uptime": 3600,
-  "service": "Handit.ai Docs AI Agent",
-  "version": "1.0.0"
+### Step 2: Setup PostgreSQL Database
+
+#### Option A: Local PostgreSQL Installation
+
+```bash
+# Install PostgreSQL (macOS with Homebrew)
+brew install postgresql
+brew services start postgresql
+
+# Create database and user
+psql postgres
+```
+
+```sql
+-- In PostgreSQL console:
+CREATE DATABASE handit_ai;
+CREATE USER handit_user WITH PASSWORD 'your_secure_password';
+GRANT ALL PRIVILEGES ON DATABASE handit_ai TO handit_user;
+\q
+```
+
+#### Option B: Using Docker
+
+```bash
+# Run PostgreSQL in Docker
+docker run --name handit-postgres \
+  -e POSTGRES_DB=handit_ai \
+  -e POSTGRES_USER=handit_user \
+  -e POSTGRES_PASSWORD=your_secure_password \
+  -p 5432:5432 \
+  -d postgres:13
+
+# Verify it's running
+docker ps
+```
+
+### Step 3: Setup Pinecone (Detailed Instructions)
+
+#### 3.1 Create Pinecone Account
+1. Go to [Pinecone.io](https://www.pinecone.io/)
+2. Click "Sign Up" and create a free account
+3. Verify your email address
+
+#### 3.2 Create API Key
+1. Log into your Pinecone dashboard
+2. Go to "API Keys" in the left sidebar
+3. Click "Create API Key"
+4. Name it "handit-ai-docs" 
+5. Copy the API key (you'll need this for `.env`)
+
+#### 3.3 Create Pinecone Index
+1. In Pinecone dashboard, click "Indexes" in sidebar
+2. Click "Create Index"
+3. Fill in the details:
+   - **Index Name**: `handit-ai-docs`
+   - **Dimensions**: `1536` (for OpenAI ada-002 embeddings)
+   - **Metric**: `cosine`
+   - **Pod Type**: `p1.x1` (free tier)
+4. Click "Create Index"
+5. Wait for index to be ready (shows "Ready" status)
+
+#### 3.4 Get Environment Name
+1. In the index details page, note your environment (e.g., `us-east-1-aws`)
+2. This will be your `PINECONE_ENVIRONMENT` value
+
+### Step 4: Setup OpenAI
+
+#### 4.1 Create OpenAI Account
+1. Go to [OpenAI Platform](https://platform.openai.com/)
+2. Sign up or log in
+3. Add payment method (required for API access)
+
+#### 4.2 Create API Key
+1. Go to [API Keys page](https://platform.openai.com/api-keys)
+2. Click "Create new secret key"
+3. Name it "handit-ai-docs"
+4. Copy the key (starts with `sk-`)
+
+### Step 5: Environment Configuration
+
+```bash
+# Copy the example environment file
+cp env.example .env
+```
+
+Edit `.env` file with your actual credentials:
+
+```bash
+# OpenAI Configuration
+OPENAI_API_KEY=sk-your_actual_openai_api_key_here
+OPENAI_MODEL=gpt-4
+EMBEDDING_MODEL=text-embedding-ada-002
+
+# Pinecone Configuration  
+PINECONE_API_KEY=your_actual_pinecone_api_key_here
+PINECONE_ENVIRONMENT=us-east-1-aws
+PINECONE_INDEX_NAME=handit-ai-docs
+
+# PostgreSQL Configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=handit_ai
+DB_USER=handit_user
+DB_PASSWORD=your_secure_password
+
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+```
+
+### Step 6: Database Setup
+
+```bash
+# Create database tables
+npm run db:setup
+```
+
+If you don't have this script, manually create the tables:
+
+```sql
+-- Connect to your database
+psql -h localhost -U handit_user -d handit_ai
+
+-- Create conversations table
+CREATE TABLE IF NOT EXISTS conversations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id UUID REFERENCES conversations(id),
+  role VARCHAR(50) NOT NULL,
+  content TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_conversations_session_id ON conversations(session_id);
+CREATE INDEX idx_messages_conversation_id ON messages(conversation_id);
+```
+
+### Step 7: Populate Pinecone with Documentation
+
+You'll need to upload Handit.ai documentation to your Pinecone index. Create a script to do this:
+
+```bash
+# Create a population script
+touch populate-pinecone.js
+```
+
+Example population script (you'll need actual Handit.ai docs):
+
+```javascript
+// populate-pinecone.js
+const { PineconeClient } = require('@pinecone-database/pinecone');
+const { OpenAIApi, Configuration } = require('openai');
+
+async function populatePinecone() {
+  // Initialize clients
+  const pinecone = new PineconeClient();
+  await pinecone.init({
+    apiKey: process.env.PINECONE_API_KEY,
+    environment: process.env.PINECONE_ENVIRONMENT,
+  });
+
+  const openai = new OpenAIApi(new Configuration({
+    apiKey: process.env.OPENAI_API_KEY,
+  }));
+
+  const index = pinecone.Index(process.env.PINECONE_INDEX_NAME);
+
+  // Sample documentation (replace with actual docs)
+  const docs = [
+    {
+      id: '1',
+      text: 'Handit.ai is a platform for AI observability...',
+      metadata: { source: 'getting-started', section: 'introduction' }
+    },
+    // Add more documents here
+  ];
+
+  // Generate embeddings and upload
+  for (const doc of docs) {
+    const embedding = await openai.createEmbedding({
+      model: 'text-embedding-ada-002',
+      input: doc.text,
+    });
+
+    await index.upsert({
+      upsertRequest: {
+        vectors: [{
+          id: doc.id,
+          values: embedding.data.data[0].embedding,
+          metadata: { text: doc.text, ...doc.metadata }
+        }]
+      }
+    });
+  }
+
+  console.log('Pinecone populated successfully!');
+}
+
+// Run if this file is executed directly
+if (require.main === module) {
+  require('dotenv').config();
+  populatePinecone().catch(console.error);
 }
 ```
 
-#### 2. Agent Information
-```
-GET /api/ai/info
-```
-Gets information about the AI agent capabilities.
+Run the population script:
 
-#### 3. Ask Question to AI Agent
-```
-POST /api/ai/ask
+```bash
+node populate-pinecone.js
 ```
 
-**Required headers:**
-```
-Content-Type: application/json
+### Step 8: Start the Server
+
+```bash
+# Start the development server
+npm run dev
+
+# Or start production server
+npm start
 ```
 
-**Request body:**
+You should see:
+
+```
+🚀 Server running on port 3000
+📊 Connected to PostgreSQL
+🔍 Connected to Pinecone
+🤖 AI Service initialized
+```
+
+### Step 9: Test the API
+
+#### Test Health Endpoint
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+Expected response:
 ```json
 {
-  "question": "What is Handit.ai?",
-  "language": "en",
-  "context": "Optional additional context"
-}
-```
-
-**Body fields:**
-- `question` (string, required): The question you want to ask
-- `language` (string, optional): Response language ("es" or "en"). Default: "es"
-- `context` (string, optional): Additional context for the question
-
-**Example response:**
-```json
-{
-  "success": true,
-  "data": {
-    "question": "What is Handit.ai?",
-    "answer": "Handit.ai is an artificial intelligence platform that helps companies automate and optimize their customer service and document management processes.",
-    "confidence": 0.95,
-    "sources": [
-      {
-        "url": "https://docs.handit.ai/intro",
-        "title": "Introduction to Handit.ai",
-        "relevanceScore": 0.94
-      }
-    ],
-    "language": "en",
-    "vectorMatches": 8,
-    "metadata": {
-      "processingTimeMs": 1240,
-      "timestamp": "2024-01-15T10:30:00.000Z",
-      "version": "2.0.0",
-      "ragPipeline": {
-        "retrievalTimeMs": 120,
-        "llmProcessingTimeMs": 890,
-        "vectorSearchScore": 0.94,
-        "documentsRetrieved": 5
-      }
-    }
+  "status": "healthy",
+  "timestamp": "2024-07-11T02:00:00.000Z",
+  "services": {
+    "database": "connected",
+    "pinecone": "connected",
+    "openai": "connected"
   }
 }
 ```
 
-## 🧪 Testing with Postman
+#### Test AI Chat Endpoint
 
-### Postman Configuration
-
-1. **Create a new collection** called "Handit.ai AI Agent"
-
-2. **Configure environment variable:**
-   - Variable: `base_url`
-   - Value: `http://localhost:3000`
-
-### Request Examples
-
-#### Health Check
-```
-GET {{base_url}}/api/health
-```
-
-#### Agent Information
-```
-GET {{base_url}}/api/ai/info
-```
-
-#### Question about Handit.ai
-```
-POST {{base_url}}/api/ai/ask
-Content-Type: application/json
-
-{
-  "question": "What are the main features of Handit.ai?",
-  "language": "en"
-}
-```
-
-#### Spanish Question
-```
-POST {{base_url}}/api/ai/ask
-Content-Type: application/json
-
-{
-  "question": "¿Qué es Handit.ai?",
-  "language": "es"
-}
-```
-
-#### Question with Context
-```
-POST {{base_url}}/api/ai/ask
-Content-Type: application/json
-
-{
-  "question": "How can I integrate Handit with my system?",
-  "language": "en",
-  "context": "I have a custom CRM system built in Python"
-}
-```
-
-## 📁 Project Structure
-
-```
-handit.ai-docs-ai-agent/
-├── src/
-│   ├── controllers/
-│   │   ├── aiController.js         # Main AI agent controller
-│   │   └── documentController.js   # Document management controller
-│   ├── middleware/
-│   │   ├── validation.js           # Request validation middleware
-│   │   ├── rateLimiting.js         # AI-specific rate limiting
-│   │   └── errorHandler.js         # Advanced error handling
-│   ├── routes/
-│   │   ├── ai.js                   # AI agent routes (RAG endpoints)
-│   │   ├── health.js               # Health check routes
-│   │   └── admin.js                # Admin routes for model management
-│   ├── services/
-│   │   ├── aiService.js            # Core AI orchestration service
-│   │   ├── llmService.js           # LLM integration service
-│   │   ├── vectorService.js        # Pinecone vector database service
-│   │   ├── ragService.js           # RAG pipeline implementation
-│   │   ├── embeddingService.js     # Document embedding service
-│   │   └── feedbackService.js      # Self-improvement feedback service
-│   ├── utils/
-│   │   ├── documentProcessor.js    # Document chunking and preprocessing
-│   │   ├── vectorUtils.js          # Vector operations utilities
-│   │   └── performanceMonitor.js   # Performance tracking utilities
-│   ├── config/
-│   │   ├── llmConfig.js            # LLM configuration
-│   │   ├── pineconeConfig.js       # Pinecone setup and configuration
-│   │   └── ragConfig.js            # RAG pipeline configuration
-│   └── server.js                   # Main Express server
-├── scripts/
-│   ├── setupVectorDB.js            # Initialize Pinecone index
-│   ├── indexDocuments.js           # Bulk document indexing
-│   └── modelTuning.js              # Self-improvement scripts
-├── docs/
-│   ├── API.md                      # Detailed API documentation
-│   ├── ARCHITECTURE.md             # System architecture documentation
-│   └── DEPLOYMENT.md               # Deployment guidelines
-├── tests/
-│   ├── unit/                       # Unit tests
-│   ├── integration/                # Integration tests
-│   └── e2e/                        # End-to-end tests
-├── env.example                     # Environment variables example
-├── .gitignore                      # Git ignore file (AI/ML optimized)
-├── docker-compose.yml              # Docker setup with AI services
-├── package.json                    # Dependencies and AI-specific scripts
-└── README.md                       # This file
-```
-
-## ⚙️ Configuration
-
-### Environment Variables
-
-#### **Server Configuration**
-| Variable | Description | Default Value |
-|----------|-------------|---------------|
-| `PORT` | Server port | 3000 |
-| `NODE_ENV` | Runtime environment | development |
-| `HANDIT_DOCS_URL` | Documentation base URL | https://docs.handit.ai |
-| `RATE_LIMIT_WINDOW_MS` | Rate limiting window (ms) | 900000 (15 min) |
-| `RATE_LIMIT_MAX_REQUESTS` | Max requests per window | 100 |
-
-#### **AI/LLM Configuration**
-| Variable | Description | Default Value |
-|----------|-------------|---------------|
-| `LLM_PROVIDER` | LLM service provider | openai |
-| `OPENAI_API_KEY` | OpenAI API key | *required* |
-| `ANTHROPIC_API_KEY` | Anthropic Claude API key | *optional* |
-| `HUGGINGFACE_API_KEY` | Hugging Face API key | *optional* |
-| `LLM_MODEL` | Primary LLM model | gpt-3.5-turbo |
-| `LLM_TEMPERATURE` | Response creativity (0-1) | 0.3 |
-| `LLM_MAX_TOKENS` | Maximum response tokens | 1000 |
-
-#### **Vector Database (Pinecone)**
-| Variable | Description | Default Value |
-|----------|-------------|---------------|
-| `PINECONE_API_KEY` | Pinecone API key | *required* |
-| `PINECONE_ENVIRONMENT` | Pinecone environment | *required* |
-| `PINECONE_INDEX_NAME` | Index name for documents | handit-docs-index |
-| `PINECONE_NAMESPACE` | Namespace for organization | documentation |
-| `PINECONE_TOP_K` | Number of similar vectors to retrieve | 5 |
-
-#### **RAG Pipeline Configuration**
-| Variable | Description | Default Value |
-|----------|-------------|---------------|
-| `EMBEDDING_MODEL` | Embedding model for vectors | text-embedding-ada-002 |
-| `CHUNK_SIZE` | Document chunk size (chars) | 1000 |
-| `CHUNK_OVERLAP` | Overlap between chunks | 200 |
-| `MAX_RETRIEVAL_DOCS` | Max documents to retrieve | 5 |
-| `SIMILARITY_THRESHOLD` | Minimum similarity score | 0.7 |
-
-#### **Self-Improvement Features**
-| Variable | Description | Default Value |
-|----------|-------------|---------------|
-| `FEEDBACK_COLLECTION` | Enable feedback collection | enabled |
-| `MODEL_FINE_TUNING` | Enable model fine-tuning | disabled |
-| `PERFORMANCE_MONITORING` | Enable performance tracking | enabled |
-| `QUALITY_THRESHOLD` | Minimum response quality | 0.8 |
-
-## 🔧 Development
-
-### Available Scripts
-
-#### **Server Management**
-- `npm start`: Starts the server in production mode
-- `npm run dev`: Starts the server in development mode with auto-reload
-- `npm test`: Runs comprehensive test suite (unit, integration, e2e)
-- `npm run lint`: Runs ESLint for code quality
-- `npm run build`: Builds optimized production bundle
-
-#### **AI/ML Operations**
-- `npm run setup:vectordb`: Initialize Pinecone vector database
-- `npm run index:docs`: Index Handit.ai documentation into vector database
-- `npm run update:embeddings`: Update document embeddings
-- `npm run tune:model`: Run self-improvement model tuning
-- `npm run benchmark`: Run AI performance benchmarks
-- `npm run health:ai`: Check AI services health status
-
-#### **Development & Monitoring**
-- `npm run logs:ai`: View AI service logs
-- `npm run metrics`: Display performance metrics
-- `npm run validate:config`: Validate environment configuration
-- `npm run cleanup:cache`: Clear AI service caches
-
-### Adding New Functionality
-
-#### **AI/ML Components**
-1. **Add new LLM provider** in `src/services/llmService.js`
-2. **Create custom RAG pipeline** in `src/services/ragService.js`
-3. **Implement new embedding models** in `src/services/embeddingService.js`
-4. **Add feedback mechanisms** in `src/services/feedbackService.js`
-
-#### **API & Infrastructure**
-1. **Create new endpoints** in `src/routes/`
-2. **Add middleware** in `src/middleware/`
-3. **Update validation rules** in `src/middleware/validation.js`
-4. **Extend controllers** in `src/controllers/`
-
-#### **Vector Database Operations**
-1. **Modify indexing strategy** in `scripts/indexDocuments.js`
-2. **Add new document types** in `src/utils/documentProcessor.js`
-3. **Optimize vector queries** in `src/services/vectorService.js`
-
-## 🐛 Error Handling
-
-The API handles several types of errors:
-
-- **400 Bad Request**: Invalid input data
-- **401 Unauthorized**: Missing authentication (in production)
-- **429 Too Many Requests**: Rate limiting exceeded
-- **500 Internal Server Error**: Internal server error
-- **503 Service Unavailable**: AI service unavailable
-
-## 🏗️ AI Architecture
-
-### **RAG Pipeline Overview**
-```
-User Question → Input Validation → Query Enhancement → Vector Search → Document Retrieval → Context Assembly → LLM Processing → Response Generation → Self-Improvement Feedback
-```
-
-### **Core Components**
-
-#### **1. Vector Database (Pinecone)**
-- **Real-time semantic search** across Handit.ai documentation
-- **High-dimensional embeddings** using state-of-the-art models
-- **Metadata filtering** for precise document retrieval
-- **Scalable indexing** for continuous documentation updates
-
-#### **2. LLM Integration**
-- **Multi-provider support** (OpenAI, Anthropic, Hugging Face)
-- **Prompt engineering** for optimal response quality
-- **Token optimization** for cost-effective processing
-- **Temperature control** for response creativity balance
-
-#### **3. RAG Pipeline**
-- **Document chunking** with intelligent overlap strategies
-- **Context ranking** based on semantic similarity
-- **Response synthesis** combining multiple relevant sources
-- **Quality validation** through confidence scoring
-
-#### **4. Self-Improvement Loop**
-- **Performance monitoring** with detailed metrics tracking
-- **Feedback collection** from user interactions
-- **Model fine-tuning** based on usage patterns
-- **Continuous optimization** of retrieval and generation
-
-## 📊 Monitoring and Logs
-
-### **Comprehensive Logging**
-The system automatically tracks:
-- **HTTP requests** with detailed timing metrics
-- **AI pipeline performance** (embedding, retrieval, generation)
-- **Vector database operations** and response times
-- **LLM API calls** with token usage and costs
-- **Error classification** with AI-specific error codes
-- **User feedback** and response quality metrics
-
-### **Performance Metrics**
-- **Response Time**: < 2000ms average
-- **Vector Search Latency**: < 100ms
-- **LLM Processing Time**: < 1500ms
-- **Accuracy Rate**: 95%+ based on user feedback
-- **Cost per Query**: Optimized token usage
-
-## 🚀 Deployment
-
-### **Production Deployment**
-
-#### **1. Environment Setup**
 ```bash
-# Set production environment variables
-export NODE_ENV=production
-export PORT=3000
-
-# Configure AI service API keys
-export OPENAI_API_KEY=your_production_openai_key
-export PINECONE_API_KEY=your_production_pinecone_key
-export PINECONE_ENVIRONMENT=your_production_environment
-
-# Set resource limits
-export LLM_MAX_TOKENS=1000
-export PINECONE_TOP_K=5
-export MAX_RETRIEVAL_DOCS=5
+curl -X POST http://localhost:3000/api/ai/ask \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "How do I setup Handit.ai?",
+    "sessionId": "test-session-123"
+  }'
 ```
 
-#### **2. Installation & Setup**
+Expected response structure:
+```json
+{
+  "answer": "To setup Handit.ai, you need to...",
+  "confidence": 0.95,
+  "sources": [
+    {
+      "text": "Documentation content...",
+      "score": 0.89
+    }
+  ],
+  "totalSources": 3,
+  "sessionId": "test-session-123",
+  "technicalContext": {
+    "detectedLanguage": "unknown",
+    "detectedFramework": "unknown"
+  },
+  "responseMetadata": {
+    "answerType": "complete",
+    "coverageLevel": "moderate",
+    "includesCodeExamples": false,
+    "includesStepByStep": true
+  },
+  "intermediateResponses": {
+    "node1_context_analysis": { /* Full LLM response */ },
+    "node2_intent_planning": { /* Full LLM response */ },
+    "node3_knowledge_synthesis": { /* Full LLM response */ },
+    "node4_response_generation": { /* Full LLM response */ }
+  }
+}
+```
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### 1. Database Connection Failed
 ```bash
-# Install production dependencies
-npm install --production
+# Check if PostgreSQL is running
+pg_isready -h localhost -p 5432
 
-# Initialize vector database
-npm run setup:vectordb
-
-# Index documentation
-npm run index:docs
-
-# Validate configuration
-npm run validate:config
-
-# Start server
-npm start
+# Check connection with credentials
+psql -h localhost -U handit_user -d handit_ai
 ```
 
-### **Docker Deployment**
+#### 2. Pinecone Connection Failed
+- Verify API key is correct
+- Check environment name matches your index
+- Ensure index is in "Ready" status
 
-#### **Dockerfile**
-```dockerfile
-FROM node:18-alpine
+#### 3. OpenAI API Errors
+- Verify API key is valid
+- Check you have credits in your OpenAI account
+- Ensure billing is set up
 
-# Install system dependencies for AI libraries
-RUN apk add --no-cache python3 py3-pip build-base
+#### 4. Empty Responses
+- Check if Pinecone index has documents
+- Verify documents have proper embeddings
+- Check minimum score threshold (0.7)
 
-WORKDIR /app
+### Debugging
 
-# Copy package files
-COPY package*.json ./
+Enable debug logging:
 
-# Install dependencies
-RUN npm install --production
+```bash
+# Set debug environment
+DEBUG=* npm run dev
 
-# Copy application code
-COPY . .
-
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nextjs -u 1001
-USER nextjs
-
-# Expose port
-EXPOSE 3000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/api/health || exit 1
-
-# Start application
-CMD ["npm", "start"]
+# Or specific modules
+DEBUG=ai:*,pinecone:* npm run dev
 ```
 
-#### **Docker Compose with AI Services**
-```yaml
-version: '3.8'
+Check logs:
+```bash
+# View server logs
+tail -f logs/server.log
 
-services:
-  handit-ai-agent:
-    build: .
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - PINECONE_API_KEY=${PINECONE_API_KEY}
-      - PINECONE_ENVIRONMENT=${PINECONE_ENVIRONMENT}
-    depends_on:
-      - redis
-      - prometheus
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-
-  prometheus:
-    image: prom/prometheus:latest
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    restart: unless-stopped
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3001:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    volumes:
-      - grafana_data:/var/lib/grafana
-    restart: unless-stopped
-
-volumes:
-  redis_data:
-  prometheus_data:
-  grafana_data:
+# View error logs  
+tail -f logs/error.log
 ```
 
-### **Cloud Deployment Options**
+## 📊 API Endpoints
 
-#### **AWS Deployment**
-- **ECS/Fargate** for containerized deployment
-- **Lambda** for serverless AI functions
-- **OpenSearch** as vector database alternative
-- **CloudWatch** for monitoring and logging
+### POST `/api/ai/ask`
+Main endpoint for AI questions.
 
-#### **Google Cloud Deployment**
-- **Cloud Run** for scalable container deployment
-- **Vertex AI** for managed AI services
-- **Cloud Monitoring** for observability
+**Request:**
+```json
+{
+  "question": "How do I install Handit.ai?",
+  "sessionId": "optional-session-id",
+  "language": "auto"
+}
+```
 
-#### **Production Checklist**
-- ✅ Configure environment variables securely
-- ✅ Set up vector database with proper indexing
-- ✅ Configure monitoring and alerting
-- ✅ Implement backup strategies for embeddings
-- ✅ Set up CI/CD pipeline for model updates
-- ✅ Configure load balancing for high availability
-- ✅ Enable security scanning for dependencies
-- ✅ Set up cost monitoring for AI services
+**Response:** Complete multi-node response with intermediate LLM outputs
+
+### GET `/api/health`
+Health check endpoint.
+
+### GET `/api/ai/conversations/:sessionId`
+Get conversation history.
+
+### DELETE `/api/ai/conversations/:sessionId`
+Clear conversation history.
+
+## 🚀 Production Deployment
+
+### Environment Variables for Production
+
+```bash
+# Production environment
+NODE_ENV=production
+PORT=3000
+
+# Database (use connection pooling)
+DB_HOST=your-db-host
+DB_PORT=5432
+DB_NAME=handit_ai_prod
+DB_USER=handit_user
+DB_PASSWORD=secure_password
+DB_SSL=true
+
+# Pinecone (production index)
+PINECONE_INDEX_NAME=handit-ai-docs-prod
+
+# Rate limiting
+RATE_LIMIT_MAX=100
+RATE_LIMIT_WINDOW=60000
+```
+
+### Docker Deployment
+
+```bash
+# Build Docker image
+docker build -t handit-ai-docs .
+
+# Run container
+docker run -p 3000:3000 \
+  --env-file .env.production \
+  handit-ai-docs
+```
+
+### Performance Monitoring
+
+```bash
+# Install PM2 for production
+npm install -g pm2
+
+# Start with PM2
+pm2 start src/server.js --name handit-ai-docs
+
+# Monitor
+pm2 monit
+
+# View logs
+pm2 logs handit-ai-docs
+```
+
+## 🔒 Security Considerations
+
+- Always use HTTPS in production
+- Implement proper API key rotation
+- Set up database connection pooling
+- Use environment-specific Pinecone indexes
+- Enable request logging and monitoring
+- Implement proper error handling (don't expose sensitive info)
+
+## 📈 Scaling
+
+- Use Redis for caching
+- Implement database read replicas
+- Use CDN for static assets
+- Monitor Pinecone query costs
+- Implement proper logging and metrics
 
 ## 🤝 Contributing
 
-1. Fork the project
+1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
@@ -630,26 +492,4 @@ volumes:
 
 ## 📄 License
 
-This project is licensed under the MIT License. See the `LICENSE` file for more details.
-
-## 📞 Support
-
-For technical support or questions, contact the development team.
-
----
-
-## 🎯 **Performance Benchmarks**
-
-| Metric | Target | Actual |
-|--------|--------|--------|
-| Response Time | < 2000ms | ~1240ms |
-| Vector Search | < 100ms | ~85ms |
-| LLM Processing | < 1500ms | ~890ms |
-| Accuracy Rate | > 95% | 97.3% |
-| Uptime | 99.9% | 99.97% |
-
----
-
-**🚀 Handit.ai Advanced Documentation AI Agent - Powered by LLMs, RAG, and Self-Improving AI**
-
-*Building the future of intelligent documentation assistance, one query at a time.* 
+MIT License - see LICENSE file for details. 

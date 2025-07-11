@@ -17,11 +17,13 @@
  * 4. Store vectors in Pinecone with metadata
  */
 
-import { Pinecone } from '@pinecone-database/pinecone';
-import OpenAI from 'openai';
-import { handitKnowledgeBase } from '../config/pinecone.js';
-import { TextProcessor } from '../utils/textProcessor.js';
-import dotenv from 'dotenv';
+
+
+const { Pinecone } = require('@pinecone-database/pinecone');
+const OpenAI = require('openai');
+const { handitKnowledgeBase, initializePinecone } = require('../config/pinecone');
+const { TextProcessor } = require('../utils/textProcessor');
+const dotenv = require('dotenv');
 
 dotenv.config();
 
@@ -38,9 +40,13 @@ dotenv.config();
  */
 async function initializeKnowledgeBase() {
     try {
+        // Initialize Pinecone with namespace
         console.log('🚀 Initializing Pinecone...');
-        const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
-        const index = pc.index(process.env.PINECONE_INDEX);
+        const pineconeConfig = await initializePinecone();
+        const index = pineconeConfig.index;
+        const namespace = pineconeConfig.namespace;
+        
+        console.log(`📂 Using namespace: ${namespace}`);
         
         console.log('🔄 Creating OpenAI client...');
         const openai = new OpenAI({
@@ -80,10 +86,10 @@ async function initializeKnowledgeBase() {
                     continue;
                 }
                 
-                // Additional text validation
-                if (chunk.text.length > 8000) {
+                // Additional text validation - be more aggressive with large chunks
+                if (chunk.text.length > 6000) {
                     console.warn(`⚠️ Chunk ${chunkIndex} is very large (${chunk.text.length} chars), truncating...`);
-                    chunk.text = chunk.text.substring(0, 8000) + '...';
+                    chunk.text = chunk.text.substring(0, 5500) + '\n\n[Content truncated for vector storage]';
                 }
                 
                 try {
@@ -140,18 +146,98 @@ async function initializeKnowledgeBase() {
                 }
             }
 
-            // Upsert records in batches if we have any valid records
+            // Upsert records in smaller batches if we have any valid records
             if (records.length > 0) {
                 console.log(`📤 Upserting ${records.length} valid records for document ${docIndex + 1}...`);
-                await index.upsert(records);
-                console.log(`✅ Successfully uploaded ${records.length} chunks for document ${docIndex + 1}`);
-                totalSuccessfulChunks += records.length;
+                
+                // Split into smaller batches to avoid size limits
+                const batchSize = Math.min(5, records.length); // Max 5 records per batch for safety
+                const batches = [];
+                for (let i = 0; i < records.length; i += batchSize) {
+                    batches.push(records.slice(i, i + batchSize));
+                }
+                
+                console.log(`   📦 Splitting into ${batches.length} batches of max ${batchSize} records each`);
+                
+                for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+                    const batch = batches[batchIndex];
+                    
+                    // Calculate approximate batch size
+                    const batchSizeBytes = JSON.stringify(batch).length;
+                    const batchSizeMB = (batchSizeBytes / (1024 * 1024)).toFixed(2);
+                    
+                    console.log(`   📤 Uploading batch ${batchIndex + 1}/${batches.length} (${batch.length} records, ~${batchSizeMB}MB)...`);
+                    
+                    // Skip batch if it's too large - more conservative limit
+                    if (batchSizeBytes > 2000000) { // 2MB safety margin
+                        console.warn(`   ⚠️ Batch ${batchIndex + 1} too large (${batchSizeMB}MB), splitting further...`);
+                        
+                        // Split this batch in half and try again
+                        const halfSize = Math.ceil(batch.length / 2);
+                        const firstHalf = batch.slice(0, halfSize);
+                        const secondHalf = batch.slice(halfSize);
+                        
+                        try {
+                            await index.upsert(firstHalf);
+                            console.log(`   ✅ First half uploaded (${firstHalf.length} records)`);
+                            totalSuccessfulChunks += firstHalf.length;
+                            
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                            
+                            await index.upsert(secondHalf);
+                            console.log(`   ✅ Second half uploaded (${secondHalf.length} records)`);
+                            totalSuccessfulChunks += secondHalf.length;
+                        } catch (splitError) {
+                            console.error(`   ❌ Error with split batches: ${splitError.message}`);
+                            // Try individual records as last resort
+                            for (const record of batch) {
+                                try {
+                                    await index.upsert([record]);
+                                    totalSuccessfulChunks++;
+                                    await new Promise(resolve => setTimeout(resolve, 200));
+                                } catch (individualError) {
+                                    console.error(`   ❌ Failed individual record: ${individualError.message}`);
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                    
+                    try {
+                        await index.upsert(batch);
+                        console.log(`   ✅ Batch ${batchIndex + 1} uploaded successfully`);
+                        totalSuccessfulChunks += batch.length;
+                        
+                        // Small delay between batches to avoid rate limits
+                        if (batchIndex < batches.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                        }
+                    } catch (batchError) {
+                        console.error(`   ❌ Error uploading batch ${batchIndex + 1}:`, batchError.message);
+                        
+                        // If it's still a size error, try with smaller chunks
+                        if (batchError.message.includes('message length too large')) {
+                            console.log(`   🔄 Retrying with individual records...`);
+                            for (const record of batch) {
+                                try {
+                                    await index.upsert([record]);
+                                    totalSuccessfulChunks++;
+                                    await new Promise(resolve => setTimeout(resolve, 200));
+                                } catch (individualError) {
+                                    console.error(`   ❌ Failed to upload individual record: ${individualError.message}`);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                console.log(`✅ Successfully uploaded ${totalSuccessfulChunks} chunks total for document ${docIndex + 1}`);
             } else {
                 console.warn(`⚠️ No valid records to upload for document ${docIndex + 1}`);
             }
             
-            // Add small delay to avoid rate limits
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Add delay between documents to avoid rate limits
+            await new Promise(resolve => setTimeout(resolve, 2000));
         }
 
         console.log('\n' + '='.repeat(60));
@@ -159,12 +245,13 @@ async function initializeKnowledgeBase() {
         console.log('='.repeat(60));
         
         // Display comprehensive stats
-        const stats = await index.describeIndexStats();
+        const stats = await pineconeConfig.baseIndex.describeIndexStats();
         console.log('📊 Final Statistics:');
         console.log(`   📁 Documents processed: ${handitKnowledgeBase.length}`);
         console.log(`   📦 Total chunks uploaded: ${totalSuccessfulChunks}`);
         console.log(`   🔧 Auto-corrections applied: ${totalAutoCorrections}`);
-        console.log(`   🎯 Vectors in index: ${stats.totalVectorCount}`);
+        console.log(`   📂 Namespace: ${namespace}`);
+        console.log(`   🎯 Total vectors in index: ${stats.totalVectorCount}`);
         console.log(`   📏 Vector dimension: ${stats.dimension}`);
         
         if (totalAutoCorrections > 0) {
