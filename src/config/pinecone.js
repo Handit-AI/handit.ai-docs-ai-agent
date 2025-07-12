@@ -213,7 +213,7 @@ The Result: Complete visibility into performance with automated optimization rec
 
 Prerequisites
 Before we start, make sure you have:
-- A Handit.ai Account (sign up if needed)`,
+- A Handit.ai Account, you can create one in the [Handit.ai Site](https://dashboard.handit.ai/auth/custom/sign-up)`,
         metadata: {
             category: "setup",
             intent: "setup_overview",
@@ -222,7 +222,9 @@ Before we start, make sure you have:
         }
     },
     {
-        text: `Phase 1: AI Observability - Python Setup
+        text: `Phase 1: AI Observability
+        
+This is the Python Setup fot Observability.
 
 Let's add comprehensive tracing to see exactly what your AI is doing.
 
@@ -242,7 +244,8 @@ Now, let's set up your main agent function, LLM calls and tool usage with tracin
 3. Track LLMs calls, tools in your workflow
 4. Set up your end tracing
 
-Create a handit_service.py file to initialize the Handit.ai tracker:
+
+First you need to to create a handit_service.py file to initialize the Handit.ai tracker, like this example:
 
 """
 Handit.ai service initialization and configuration.
@@ -269,9 +272,9 @@ tracker.config(api_key=os.getenv("HANDIT_API_KEY"))  # Sets up authentication fo
         }
     },
     {
-        text: `Phase 1: AI Observability - Python Implementation Example
+        text: `Phase 1: AI Observability - Python Set up your start tracing, Track LLMs calls, tools in your workflow, Set up your end tracing Example
 
-The example uses three main Handit.ai tracing functions:
+This example uses three main Handit.ai tracing functions:
 
 startTracing({ agentName }): Starts a new trace session
 - agentName: The name of your AI Application
@@ -377,6 +380,8 @@ Phase 1 Complete! 🎉 You now have full observability with every operation, tim
     },
     {
         text: `Phase 1: AI Observability - JavaScript Setup
+
+This is the JavaScript Setup fot Observability.
 
 Step 1: Install the SDK
 npm install @handit.ai/node

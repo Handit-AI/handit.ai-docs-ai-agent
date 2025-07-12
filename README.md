@@ -1,19 +1,28 @@
 # Handit.ai Docs AI Agent
 
-Professional multi-node agentic system for Handit.ai documentation assistance. Automatically detects user language and context to provide precise solutions.
+Professional multi-node agentic system for Handit.ai documentation assistance. Specialized Copilot that guides users through complete Handit.ai setup with intelligent phase detection and tech-stack specific instructions.
 
 ## 🚀 Features
 
-### Multi-Node Agentic System
-- **4-Node LLM Architecture**: Context Analysis → Intent Planning → Knowledge Synthesis → Response Generation
+### 6-LLM Specialized Architecture
+- **🚦 Router Agent LLM**: Classifies queries as Handit.ai-related or off-topic
+- **❓ Context Questioner LLM**: Intelligently asks for tech stack details when needed
+- **🔄 Phase Router LLM**: Determines which Handit.ai phase user needs (1, 2, or 3)
+- **👀 Observability LLM**: Phase 1 expert (Tracing/SDK setup) with 7-step complete guide
+- **📊 Evaluation LLM**: Phase 2 expert (Quality evaluation setup)  
+- **🚀 Self-Improving LLM**: Phase 3 expert (Optimization and A/B testing)
+
+### Intelligent Copilot Features
 - **Automatic Language Detection**: Responds in user's detected language (Spanish/English)
-- **Pinecone RAG Integration**: Semantic search through Handit.ai documentation
-- **Conversation History**: Persistent conversations with PostgreSQL
-- **Unlimited Response Length**: No token limits on final responses
+- **Tech Stack Detection**: Identifies Python/JavaScript, LangChain/OpenAI, local/cloud
+- **Phase Prerequisites**: Ensures Phase 1 → Phase 2 → Phase 3 progression
+- **Complete Setup Guides**: 7-step implementation with copy-paste code examples
+- **Built-in Knowledge Base**: Direct access to complete Handit.ai documentation
 
 ### Advanced Technologies
-- **RAG (Retrieval-Augmented Generation)**: Semantic search with Pinecone vector database
-- **Multi-LLM Processing**: OpenAI GPT with specialized prompts for each node
+- **Specialized LLM Routing**: Each LLM is an expert in its specific domain
+- **Direct Knowledge Access**: Built-in handitKnowledgeBase with all documentation
+- **Multi-LLM Processing**: OpenAI GPT with specialized prompts for each expert
 - **Conversation Management**: PostgreSQL-based conversation persistence
 - **Complete Logging**: All intermediate LLM responses included in API response
 
@@ -74,21 +83,23 @@ docker run --name handit-postgres \
 docker ps
 ```
 
-### Step 3: Setup Pinecone (Detailed Instructions)
+### Step 3: Setup Pinecone (Optional - For Future Extensions)
 
-#### 3.1 Create Pinecone Account
+The system now uses a built-in knowledge base (`handitKnowledgeBase`) with all Handit.ai documentation. Pinecone setup is optional but recommended for future extensibility.
+
+#### 3.1 Create Pinecone Account (Optional)
 1. Go to [Pinecone.io](https://www.pinecone.io/)
 2. Click "Sign Up" and create a free account
 3. Verify your email address
 
-#### 3.2 Create API Key
+#### 3.2 Create API Key (Optional)
 1. Log into your Pinecone dashboard
 2. Go to "API Keys" in the left sidebar
 3. Click "Create API Key"
 4. Name it "handit-ai-docs" 
 5. Copy the API key (you'll need this for `.env`)
 
-#### 3.3 Create Pinecone Index
+#### 3.3 Create Pinecone Index (Optional)
 1. In Pinecone dashboard, click "Indexes" in sidebar
 2. Click "Create Index"
 3. Fill in the details:
@@ -99,9 +110,7 @@ docker ps
 4. Click "Create Index"
 5. Wait for index to be ready (shows "Ready" status)
 
-#### 3.4 Get Environment Name
-1. In the index details page, note your environment (e.g., `us-east-1-aws`)
-2. This will be your `PINECONE_ENVIRONMENT` value
+**Note**: The system works without Pinecone as it uses the built-in `handitKnowledgeBase`.
 
 ### Step 4: Setup OpenAI
 
@@ -131,10 +140,11 @@ OPENAI_API_KEY=sk-your_actual_openai_api_key_here
 OPENAI_MODEL=gpt-4
 EMBEDDING_MODEL=text-embedding-ada-002
 
-# Pinecone Configuration  
+# Pinecone Configuration (Optional)
 PINECONE_API_KEY=your_actual_pinecone_api_key_here
 PINECONE_ENVIRONMENT=us-east-1-aws
 PINECONE_INDEX_NAME=handit-ai-docs
+PINECONE_NAMESPACE=HANDIT
 
 # PostgreSQL Configuration
 DB_HOST=localhost
@@ -181,79 +191,33 @@ CREATE INDEX idx_conversations_session_id ON conversations(session_id);
 CREATE INDEX idx_messages_conversation_id ON messages(conversation_id);
 ```
 
-### Step 7: Populate Pinecone with Documentation
+### Step 7: Built-in Knowledge Base
 
-You'll need to upload Handit.ai documentation to your Pinecone index. Create a script to do this:
+The system includes a comprehensive built-in knowledge base (`handitKnowledgeBase`) located in `src/config/pinecone.js`. This contains all Handit.ai documentation including:
 
-```bash
-# Create a population script
-touch populate-pinecone.js
-```
+- **Phase 1 (Observability)**: SDK installation, tracing setup, code examples
+- **Phase 2 (Evaluation)**: Quality evaluation, evaluators, metrics  
+- **Phase 3 (Self-Improving)**: Optimization, A/B testing, Release Hub
+- **Setup guides**: Complete step-by-step instructions for Python and JavaScript
+- **Examples**: Copy-paste ready code implementations
 
-Example population script (you'll need actual Handit.ai docs):
-
+#### Knowledge Base Structure
 ```javascript
-// populate-pinecone.js
-const { PineconeClient } = require('@pinecone-database/pinecone');
-const { OpenAIApi, Configuration } = require('openai');
-
-async function populatePinecone() {
-  // Initialize clients
-  const pinecone = new PineconeClient();
-  await pinecone.init({
-    apiKey: process.env.PINECONE_API_KEY,
-    environment: process.env.PINECONE_ENVIRONMENT,
-  });
-
-  const openai = new OpenAIApi(new Configuration({
-    apiKey: process.env.OPENAI_API_KEY,
-  }));
-
-  const index = pinecone.Index(process.env.PINECONE_INDEX_NAME);
-
-  // Sample documentation (replace with actual docs)
-  const docs = [
-    {
-      id: '1',
-      text: 'Handit.ai is a platform for AI observability...',
-      metadata: { source: 'getting-started', section: 'introduction' }
-    },
-    // Add more documents here
-  ];
-
-  // Generate embeddings and upload
-  for (const doc of docs) {
-    const embedding = await openai.createEmbedding({
-      model: 'text-embedding-ada-002',
-      input: doc.text,
-    });
-
-    await index.upsert({
-      upsertRequest: {
-        vectors: [{
-          id: doc.id,
-          values: embedding.data.data[0].embedding,
-          metadata: { text: doc.text, ...doc.metadata }
-        }]
-      }
-    });
+// Located in src/config/pinecone.js
+const handitKnowledgeBase = [
+  {
+    text: "Complete documentation content...",
+    metadata: {
+      category: "setup|evaluation|optimization", 
+      phase: "overview|phase_1|phase_2|phase_3",
+      language: "python|javascript"
+    }
   }
-
-  console.log('Pinecone populated successfully!');
-}
-
-// Run if this file is executed directly
-if (require.main === module) {
-  require('dotenv').config();
-  populatePinecone().catch(console.error);
-}
+  // 14+ comprehensive documents
+];
 ```
 
-Run the population script:
-
-```bash
-node populate-pinecone.js
-```
+**No additional setup required** - the knowledge base is ready to use!
 
 ### Step 8: Start the Server
 
@@ -270,8 +234,10 @@ You should see:
 ```
 🚀 Server running on port 3000
 📊 Connected to PostgreSQL
-🔍 Connected to Pinecone
+🔍 Connected to Pinecone (optional)
 🤖 AI Service initialized
+📚 Knowledge Base loaded (14 documents)
+🎯 6-LLM Agentic System ready
 ```
 
 ### Step 9: Test the API
@@ -298,10 +264,10 @@ Expected response:
 #### Test AI Chat Endpoint
 
 ```bash
-curl -X POST http://localhost:3000/api/ai/ask \
+curl -X POST http://localhost:3000/api/ai/chat \
   -H "Content-Type: application/json" \
   -d '{
-    "question": "How do I setup Handit.ai?",
+    "message": "How do I setup Handit.ai tracing?",
     "sessionId": "test-session-123"
   }'
 ```
@@ -309,32 +275,34 @@ curl -X POST http://localhost:3000/api/ai/ask \
 Expected response structure:
 ```json
 {
-  "answer": "To setup Handit.ai, you need to...",
-  "confidence": 0.95,
+  "answer": "Te guiaré paso a paso para configurar Handit.ai exitosamente...",
+  "sessionId": "test-session-123",
+  "requiresUserInput": true,
+  "nextAction": "wait_for_step_confirmation",
+  "detectedLanguage": "spanish",
+  "phase": "observability",
+  "userTechStack": {
+    "language": "python",
+    "framework": "langchain", 
+    "environment": "local"
+  },
+  "nodeType": "observability_llm_response",
+  "routingDecisions": {
+    "routerAgent": "HANDIT_AI",
+    "contextQuestioner": "no_questions_needed",
+    "phaseRouter": "OBSERVABILITY"
+  },
   "sources": [
     {
-      "text": "Documentation content...",
-      "score": 0.89
+      "text": "Phase 1: AI Observability setup guide...",
+      "metadata": {
+        "category": "setup",
+        "phase": "phase_1",
+        "language": "python"
+      }
     }
   ],
-  "totalSources": 3,
-  "sessionId": "test-session-123",
-  "technicalContext": {
-    "detectedLanguage": "unknown",
-    "detectedFramework": "unknown"
-  },
-  "responseMetadata": {
-    "answerType": "complete",
-    "coverageLevel": "moderate",
-    "includesCodeExamples": false,
-    "includesStepByStep": true
-  },
-  "intermediateResponses": {
-    "node1_context_analysis": { /* Full LLM response */ },
-    "node2_intent_planning": { /* Full LLM response */ },
-    "node3_knowledge_synthesis": { /* Full LLM response */ },
-    "node4_response_generation": { /* Full LLM response */ }
-  }
+  "totalSources": 14
 }
 ```
 
@@ -351,20 +319,28 @@ pg_isready -h localhost -p 5432
 psql -h localhost -U handit_user -d handit_ai
 ```
 
-#### 2. Pinecone Connection Failed
-- Verify API key is correct
+#### 2. Pinecone Connection Failed (Optional Service)
+- Verify API key is correct (if using Pinecone)
 - Check environment name matches your index
-- Ensure index is in "Ready" status
+- **Note**: System works without Pinecone using built-in knowledge base
 
 #### 3. OpenAI API Errors
 - Verify API key is valid
 - Check you have credits in your OpenAI account
 - Ensure billing is set up
+- Check model name in .env (default: gpt-4)
 
-#### 4. Empty Responses
-- Check if Pinecone index has documents
-- Verify documents have proper embeddings
-- Check minimum score threshold (0.7)
+#### 4. Empty or Incorrect Responses
+- Check knowledge base is loaded (`handitKnowledgeBase` in logs)
+- Verify all 6 LLMs are responding correctly
+- Check language detection is working
+- Ensure phase routing is functioning
+
+#### 5. LLM Routing Issues
+- Check router agent decisions in logs
+- Verify phase router is selecting correct expert
+- Ensure tech stack detection is working
+- Check conversation history integration
 
 ### Debugging
 
@@ -389,28 +365,40 @@ tail -f logs/error.log
 
 ## 📊 API Endpoints
 
-### POST `/api/ai/ask`
-Main endpoint for AI questions.
+### POST `/api/ai/chat`
+Main endpoint for AI assistance with 6-LLM specialized routing.
 
 **Request:**
 ```json
 {
-  "question": "How do I install Handit.ai?",
-  "sessionId": "optional-session-id",
-  "language": "auto"
+  "message": "How do I setup Handit.ai observability?",
+  "sessionId": "optional-session-id"
 }
 ```
 
-**Response:** Complete multi-node response with intermediate LLM outputs
+**Response:** Specialized response from appropriate expert LLM with routing decisions
+
+**Key Features:**
+- **Automatic routing** to correct phase expert (Observability/Evaluation/Self-Improving)
+- **Language detection** (Spanish/English) with consistent responses
+- **Tech stack detection** (Python/JavaScript, LangChain/OpenAI)
+- **Complete 7-step guides** with copy-paste code examples
+- **Prerequisite handling** (Phase 1 → Phase 2 → Phase 3)
 
 ### GET `/api/health`
-Health check endpoint.
+Health check endpoint with service status.
 
 ### GET `/api/ai/conversations/:sessionId`
 Get conversation history.
 
 ### DELETE `/api/ai/conversations/:sessionId`
 Clear conversation history.
+
+### System Capabilities
+- **6 Specialized LLMs**: Router → Context Questioner → Phase Router → Expert LLMs
+- **Built-in Knowledge Base**: 14+ comprehensive Handit.ai documents
+- **Smart Questioning**: Only asks for tech stack when actually needed
+- **Complete Implementation**: Full code examples with start_tracing, track_node, end_tracing
 
 ## 🚀 Production Deployment
 

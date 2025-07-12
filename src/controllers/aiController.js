@@ -79,24 +79,6 @@ async function handleLegacyConversation(req, res) {
 }
 
 /**
- * Handle intelligent conversation (same as legacy for simplicity)
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- */
-async function handleIntelligentConversation(req, res) {
-    // Use the same logic as legacy for simplicity
-    const modifiedReq = {
-        ...req,
-        body: {
-            question: req.body.message,
-            sessionId: req.body.sessionId
-        }
-    };
-    
-    return handleLegacyConversation(modifiedReq, res);
-}
-
-/**
  * Get conversation history
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
@@ -275,7 +257,6 @@ async function handleDirectTest(req, res) {
 }
 
 module.exports = {
-    handleIntelligentConversation,
     handleLegacyConversation,
     getConversationHistory,
     clearConversation,

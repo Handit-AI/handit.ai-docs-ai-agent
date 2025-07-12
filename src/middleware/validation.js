@@ -4,17 +4,6 @@
  */
 
 /**
- * Validate message for intelligent conversation (minimal validation)
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Next middleware function
- */
-function validateMessage(req, res, next) {
-    // Skip validation - allow any message to pass through
-    next();
-}
-
-/**
  * Validate question for legacy conversation (minimal validation)
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
@@ -85,43 +74,6 @@ function rateLimitAI(req, res, next) {
 }
 
 /**
- * Sanitize input to prevent injection attacks
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Next middleware function
- */
-function sanitizeInput(req, res, next) {
-    const sanitizeString = (str) => {
-        if (typeof str !== 'string') return str;
-        
-        // Remove potentially harmful characters
-        return str
-            .replace(/[<>]/g, '') // Remove HTML tags
-            .replace(/javascript:/gi, '') // Remove javascript protocol
-            .replace(/on\w+\s*=/gi, '') // Remove event handlers
-            .trim();
-    };
-    
-    // Sanitize body parameters
-    if (req.body) {
-        if (req.body.message) {
-            req.body.message = sanitizeString(req.body.message);
-        }
-        if (req.body.question) {
-            req.body.question = sanitizeString(req.body.question);
-        }
-        if (req.body.context) {
-            req.body.context = sanitizeString(req.body.context);
-        }
-        if (req.body.sessionId) {
-            req.body.sessionId = sanitizeString(req.body.sessionId);
-        }
-    }
-    
-    next();
-}
-
-/**
  * Log requests for monitoring and debugging
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
@@ -146,9 +98,7 @@ function logRequest(req, res, next) {
 }
 
 module.exports = {
-    validateMessage,
     validateQuestion,
     rateLimitAI,
-    sanitizeInput,
     logRequest
 };

@@ -6,7 +6,6 @@
 const express = require('express');
 const router = express.Router();
 const { 
-    handleIntelligentConversation,
     handleLegacyConversation,
     getConversationHistory,
     clearConversation,
@@ -14,17 +13,8 @@ const {
     getPerformanceMetrics,
     handleDirectTest
 } = require('../controllers/aiController');
-const { validateMessage, validateQuestion } = require('../middleware/validation');
+const { validateQuestion } = require('../middleware/validation');
 
-/**
- * @route POST /api/ai/chat
- * @desc Intelligent conversation with automatic context detection
- * @access Public
- * @body {string} message - User message
- * @body {string} [sessionId] - Optional session ID
- * @returns {Object} Intelligent response with detected context
- */
-router.post('/chat', validateMessage, handleIntelligentConversation);
 
 /**
  * @route POST /api/ai/ask
@@ -36,7 +26,7 @@ router.post('/chat', validateMessage, handleIntelligentConversation);
  * @body {string} [sessionId] - Optional session ID
  * @returns {Object} Response in legacy format with agentic enhancements
  */
-router.post('/ask', validateQuestion, handleLegacyConversation);
+router.post('/chat', validateQuestion, handleLegacyConversation);
 
 /**
  * @route POST /api/ai/test

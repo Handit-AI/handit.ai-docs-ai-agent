@@ -120,7 +120,7 @@ class AIService {
             await this.initialize();
         }
 
-        const { topK = 20, minScore = 0.7 } = options;
+        const { topK = 10, minScore = 0.5 } = options;
         
         // Check document cache
         const docCacheKey = `${query}_${topK}_${minScore}`;
@@ -165,172 +165,49 @@ class AIService {
     }
 
     /**
-     * Optimized response generation with intelligent context management
-     * @async
+     * Simple response generation - direct OpenAI call with model from .env
      * @param {string} question - User question
-     * @param {Object} [options={}] - Generation options
-     * @returns {Promise<Object>} Generated response with metadata
+     * @param {Object} options - Simple options
+     * @returns {Promise<Object>} Simple response
      */
     async generateResponse(question, options = {}) {
         if (!this.initialized) {
             await this.initialize();
         }
 
-        const startTime = Date.now();
-        
         try {
             const { 
-                language = 'es', 
-                context = '',
-                sessionId = null,
-                clientIp = null,
-                userAgent = null,
-                skipRAG = false // Option to skip RAG for certain queries
+                maxTokens = 10000,
+                temperature = 0.7,
+                systemPrompt = null
             } = options;
 
-            // Check response cache for identical queries
-            const responseCacheKey = `${question}_${language}_${context}`;
-            if (this.responseCache.has(responseCacheKey)) {
-                this.cacheHitCount++;
-                const cachedResponse = this.responseCache.get(responseCacheKey);
-                return {
-                    ...cachedResponse,
-                    fromCache: true,
-                    processingTime: Date.now() - startTime
-                };
-            }
-            
-            // Handle conversation context efficiently
-            let conversationContext = null;
-            let conversation = null;
-            
-            if (sessionId) {
-                try {
-                    conversation = await this.conversationService.createOrGetConversation(
-                        sessionId, clientIp, userAgent
-                    );
-                    conversationContext = await this.conversationService.getConversationContext(
-                        sessionId, 5 // Reduced from 10 to 5 for efficiency
-                    );
-                } catch (error) {
-                    console.warn('⚠️ Error getting conversation context:', error.message);
-                }
-            }
-            
-            // Retrieve relevant documents (skip if not needed)
-            let relevantDocs = [];
-            if (!skipRAG) {
-                relevantDocs = await this.searchRelevantDocuments(question);
-            }
-            
-            // Handle case with no relevant documents more efficiently
-            if (!skipRAG && relevantDocs.length === 0) {
-                const fallbackResponse = this.generateFallbackResponse(language);
-                
-                // Save conversation if sessionId provided
-                if (sessionId && conversation) {
-                    await this.saveConversationMessage(conversation.id, 'user', question, startTime);
-                    await this.saveConversationMessage(conversation.id, 'assistant', fallbackResponse.answer, startTime);
-                }
-                
-                return fallbackResponse;
-            }
-            
-            // Prepare optimized context
-            const retrievedContext = relevantDocs
-                .slice(0, 10) // Limit to top 10 for efficiency
-                .map((doc, index) => `[${index + 1}] ${doc.text}`)
-                .join('\n\n');
-            
-
-            
-            // Prepare conversation history context (optimized)
-            let conversationHistoryContext = '';
-            if (conversationContext && conversationContext.messages.length > 0) {
-                const recentMessages = conversationContext.messages.slice(-4); // Reduced from 6 to 4
-                conversationHistoryContext = `\n\nCONVERSATION CONTEXT:\n${recentMessages
-                    .map(msg => `${msg.role}: ${msg.content.substring(0, 200)}...`)
-                    .join('\n')}`;
-            }
-            
-            // Create optimized system prompt
-            const systemPrompt = this.createOptimizedSystemPrompt(retrievedContext, conversationHistoryContext);
-            
-            // Prepare user message
-            const userMessage = context 
-                ? `Context: ${context}\n\nQuestion: ${question}`
-                : question;
-            
-            // Prepare messages for the specific model
+            // Get model from environment variable
             const modelName = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
-            const messages = [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userMessage }
-            ];
             
-            // Optimize messages for the specific model
-            const optimizedMessages = optimizeMessagesForModel(modelName, messages);
+            // Build messages
+            const messages = [];
+            if (systemPrompt) {
+                messages.push({ role: 'system', content: systemPrompt });
+            }
+            messages.push({ role: 'user', content: question });
             
-            // Get recommended settings for this model
-            const settings = getRecommendedSettings(modelName, 'conversation');
-            
-            // Use provided maxTokens or default to settings
-            const maxTokens = options.maxTokens || settings.maxTokens;
-            
-            // Build completion parameters
-            const completionParams = buildCompletionParams(modelName, {
-                messages: optimizedMessages,
-                maxTokens: maxTokens,
-                temperature: settings.temperature,
-                top_p: 0.9,
-                frequency_penalty: 0.1,
-                presence_penalty: 0.1
+            // Simple OpenAI call
+            const completion = await this.openaiClient.chat.completions.create({
+                model: modelName,
+                messages: messages,
+                max_tokens: maxTokens,
+                temperature: temperature
             });
             
-            // Generate response using OpenAI with model-specific parameters
-            const completion = await this.openaiClient.chat.completions.create(completionParams);
-            
-            const answer = completion.choices[0].message.content;
-            
-            // Calculate metrics
-            const processingTime = Date.now() - startTime;
-            const avgScore = relevantDocs.length > 0 
-                ? relevantDocs.reduce((sum, doc) => sum + doc.score, 0) / relevantDocs.length 
-                : 0;
-            const confidence = this.calculateConfidence(avgScore, relevantDocs.length);
-            
-            // Prepare optimized response
-            const response = {
-                answer,
-                sources: relevantDocs.slice(0, 5).map(doc => ({ // Limit sources to top 5
-                    text: doc.text.substring(0, 150) + '...',
-                    score: doc.score,
-                    metadata: doc.metadata
-                })),
-                confidence,
-                totalSources: relevantDocs.length,
-                processingTime,
-                fromCache: false
+            return {
+                answer: completion.choices[0].message.content,
+                model: modelName,
+                tokensUsed: completion.usage?.total_tokens || null
             };
             
-            // Cache the response
-            this.cacheResponse(responseCacheKey, response);
-            this.cacheMissCount++;
-            
-            // Save conversation asynchronously for better performance
-            if (sessionId && conversation) {
-                this.saveConversationAsync(conversation.id, question, answer, startTime, {
-                    processingTimeMs: processingTime,
-                    contextUsed: relevantDocs.map(doc => doc.id),
-                    evaluationScores: { confidence, avgScore },
-                    tokensUsed: completion.usage?.total_tokens || null
-                }, relevantDocs);
-            }
-            
-            return response;
-            
         } catch (error) {
-            console.error('❌ Error generating response:', error);
+            console.error('❌ Error in simple response generation:', error);
             throw error;
         }
     }
