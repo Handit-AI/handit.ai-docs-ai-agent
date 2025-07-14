@@ -4,11 +4,13 @@
  */
 
 const { aiService } = require('../services/aiService');
-const AgenticSystem = require('../services/agenticSystem');
+// const AgenticSystem = require('../services/agenticSystem');
 const ConversationService = require('../services/conversationService');
+const AgenticAI = require('../services/agenticAi');
 
 // Initialize services
-const agenticSystem = new AgenticSystem();
+// const agenticSystem = new AgenticSystem();
+const agenticAI = new AgenticAI();
 const conversationService = new ConversationService();
 
 /**
@@ -37,7 +39,7 @@ async function handleLegacyConversation(req, res) {
         console.log(`📝 Question: "${question.substring(0, 100)}${question.length > 100 ? '...' : ''}"`);
         
         // Process with guided agentic system
-        const response = await agenticSystem.processUserInput(question, sessionId);
+        const response = await agenticAI.processUserInput(question, sessionId);
         
         // Create or get conversation and save messages
         const conversation = await conversationService.createOrGetConversation(sessionId);
@@ -50,6 +52,9 @@ async function handleLegacyConversation(req, res) {
         res.json({
             answer: response.answer,
             sessionId: sessionId,
+            userMessage: response.userMessage,
+            conversationHistory: response.conversationHistory,
+            intention: response.intention,
             confidence: response.confidence,
             sources: response.sources,
             totalSources: response.totalSources,
