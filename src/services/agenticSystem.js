@@ -71,10 +71,10 @@ class AgenticSystem {
             const routerPrompt = `You are a Router Agent for Handit.ai Copilot. Your job is to decide if the user's question is about Handit.ai or not.
 
 HANDIT.AI TOPICS INCLUDE:
-- Setup and configuration of Handit.ai (setup, settear, configurar, instalar), everything related to dev topic
-- Installation of SDKs (Python, JavaScript)
+- Setup and configuration of Handit.ai (setup, settear, configurar, instalar), everything related to dev topic, code
+- Installation of SDKs (Python, JavaScript) or any other language
 - Integration with tech stacks (LangChain, OpenAI, etc.)
-- Features: Tracing, Evaluation, Optimization, CI/CD
+- Features: Tracing, Evaluation, Optimization, CI/CD, A/B testing, self-optimization, prompt management, agent monitoring and observability, LLM performance evaluation, prompt management and self-optimization, A/B testing for AI, Troubleshooting Handit.ai issues, Getting started with Handit.ai, Questions about Handit.ai documentation
 - Agent monitoring and observability
 - LLM performance evaluation
 - Prompt management and self-optimization
@@ -92,7 +92,7 @@ CURRENT USER MESSAGE: "${userMessage}"
 
 DECISION RULES:
 1. If the message is about Handit.ai topics → Return "HANDIT_AI"
-2. If the message mentions setup/configuration terms (even without "Handit.ai") → Return "HANDIT_AI" 
+2. If the message mentions setup/configuration terms (even without "Handit.ai") or HANDIT.AI TOPICS explained above → Return "HANDIT_AI" 
 3. If the message is clearly about unrelated topics (pizza, weather, general chat, etc.) → Return "OFF_TOPIC"
 
 EXAMPLES:
@@ -173,100 +173,55 @@ CRITICAL RULES:
             // Use handitKnowledgeBase directly as context
             const availableContext = handitKnowledgeBase;
             
-            console.log(`📚 CONTEXTO DISPONIBLE: ${availableContext.length} documentos de handitKnowledgeBase`);
-            
             // Prepare conversation history
             const conversationContext = conversationHistory.messages?.map(msg => `${msg.role}: ${msg.content}`).join('\n') || 'No previous conversation';
             
                         console.log('\n🤔 EVALUANDO NECESIDAD DE PREGUNTAS AL USUARIO:');
             console.log(`- Pregunta del usuario: "${userMessage}"`);
-            console.log(`- Contexto disponible: ${availableContext.length} documentos`);
+            console.log(`- Contexto disponible: ${availableContext}`);
             console.log(`- Contexto completo de handitKnowledgeBase`);
             
-            const questionAnalysisPrompt = `You are a Context Questioner for Handit.ai. Your job is to decide if you need to ask the user questions to provide a complete and accurate response.
-
-CRITICAL: DETECT the user's language from their message and generate ALL questions in that SAME language (Spanish if Spanish, English if English, etc.).
+            const questionAnalysisPrompt = `You are a Context Questioner for Handit.ai. You ask ONLY 3 simple questions, and ALL questions are OPTIONAL.
 
 USER MESSAGE: "${userMessage}"
-USER INTENT: ${routerDecision.userIntent}
+CONVERSATION HISTORY: ${conversationContext}
 
-CONVERSATION HISTORY:
-${conversationContext}
+IMPORTANT: 
+1. DETECT the user's language (Spanish/English) from their message
+2. Check if you already asked questions before and user ignored them → If YES, set needsUserInput to FALSE
 
-AVAILABLE HANDIT.AI KNOWLEDGE BASE:
-- Total documents available: ${availableContext.length}
-- Complete knowledge base with setup guides, examples, and documentation
-- All phases covered: Overview, Observability, Evaluation, Self-Improving
+SPANISH:
+- "¿Sobre qué es tu aplicación IA, qué es lo que hace?"
+- "¿En qué lenguaje de programación está construido?"
+- "¿Qué framework estás usando?"
 
-CONTEXT SUMMARY:
-${availableContext}
+ENGLISH:
+- "What is your AI application about, what does it do?"
+- "What programming language is it built in?"
+- "What framework are you using?"
 
-CRITICAL ANALYSIS:
-1. Can you provide a complete, accurate answer with the current context?
-2. What specific information is missing to give the best possible response?
-3. Are there questions that would significantly improve the response quality?
-4. DETECT the user's language and respond in that SAME language
-
-IMPORTANT RULES:
-- Only ask questions if they are ESSENTIAL for providing a complete answer
-- For setup/configuration questions, programming language and framework are usually essential
-- For troubleshooting, specific error details are usually essential
-- For integration questions, current tech stack is usually essential
-- Don't ask questions if the context already contains the information
-- Keep questions concise and focused
-- ALWAYS generate questions in the user's detected language
+CRITICAL RULES:
+- ALL questions are OPTIONAL
+- If user ignored questions before → set needsUserInput to FALSE
+- If no previous questions found → ask the 3 questions in user's language
+- Always proceed to next node, questions are just nice-to-have
 
 RESPONSE FORMAT (JSON):
 {
-  "detectedLanguage": "spanish|english|other",
+  "detectedLanguage": "spanish|english",
   "needsUserInput": true/false,
-  "reasoning": "Detailed explanation of why questions are needed or not",
+  "reasoning": "Brief reason",
   "questions": [
     {
-      "question": "¿En qué lenguaje de programación está construido tu agente IA? (Python, JavaScript, etc.)",
-      "category": "technical_stack",
-      "importance": "critical",
-      "purpose": "Para proporcionar instrucciones específicas del lenguaje"
-    },
-    {
-      "question": "¿Qué framework estás usando? (LangChain, OpenAI SDK, etc.)",
-      "category": "technical_stack", 
-      "importance": "high",
-      "purpose": "Para proporcionar pasos de integración específicos del framework"
+      "question": "question text in user language",
+      "category": "application_context|technical_stack",
+      "importance": "optional",
+      "purpose": "To provide better guidance"
     }
   ],
-  "canAnswerWithoutQuestions": true/false,
-  "contextCompleteness": "complete|partial|insufficient"
-}
-
-LANGUAGE-SPECIFIC EXAMPLES:
-
-SPANISH USER EXAMPLES:
-- User: "como puedo settear" → Questions in Spanish:
-  * "¿En qué lenguaje de programación está construido tu agente IA?"
-  * "¿Qué framework estás usando?"
-- User: "ayuda con integración" → Questions in Spanish:
-  * "¿Cuál es tu stack tecnológico actual?"
-
-ENGLISH USER EXAMPLES:
-- User: "how to setup" → Questions in English:
-  * "What programming language is your AI agent built in?"
-  * "Which framework are you using?"
-- User: "integration help" → Questions in English:
-  * "What is your current tech stack?"
-
-WHEN TO ASK QUESTIONS:
-- User asks setup/configuration → Ask about programming language and framework
-- User asks integration help → Ask about current tech stack
-- User asks troubleshooting → Ask about specific error or issue
-- User asks best practices → Usually don't need to ask, can provide general guidance
-
-WHEN NOT TO ASK:
-- User asks "what is Handit.ai" → Can answer from documentation
-- User asks "pricing" → Can answer from documentation
-- Context already contains tech stack information from conversation history
-
-CRITICAL: Generate questions in the user's detected language!`;
+  "canAnswerWithoutQuestions": true,
+  "contextCompleteness": "sufficient"
+}`;
 
             const questionAnalysisResponse = await aiService.generateResponse(questionAnalysisPrompt, {
                 maxTokens: 800
@@ -305,25 +260,45 @@ CRITICAL: Generate questions in the user's detected language!`;
                     console.log('   ---');
                 });
                 
-                // Generate user-facing questions
+                // Generate user-facing questions with natural intro
                 const userQuestions = questionAnalysis.questions.map(q => q.question).join('\n\n');
                 
-                // Generate intro message in detected language
-                const introMessages = {
-                    spanish: `Para darte la mejor respuesta posible, necesito conocer algunos detalles:\n\n${userQuestions}`,
-                    english: `To provide you with the best possible answer, I need to know some details:\n\n${userQuestions}`,
-                    other: `Para darte la mejor respuesta posible, necesito conocer algunos detalles:\n\n${userQuestions}` // Default to Spanish
-                };
+                // Generate natural intro message using LLM
+                const introPrompt = `You are a helpful Handit.ai assistant. Generate a natural, friendly introduction for asking the user some questions.
+
+USER MESSAGE: "${userMessage}"
+USER INTENT: ${routerDecision.userIntent}
+DETECTED LANGUAGE: ${questionAnalysis.detectedLanguage || 'spanish'}
+
+QUESTIONS TO ASK:
+${userQuestions}
+
+INSTRUCTIONS:
+- Generate a natural, conversational introduction in ${questionAnalysis.detectedLanguage || 'spanish'}
+- Explain briefly why you need this information
+- Be friendly and helpful
+- Keep it concise but warm
+- Include the questions naturally in your response
+- Don't use formal templates, make it sound conversational
+
+RESPONSE FORMAT: Just generate the complete message text that will be sent to the user (no JSON, no quotes, just the natural text).
+
+EXAMPLES:
+Spanish: "¡Perfecto! Para ayudarte con la configuración de Handit.ai, necesito conocer un poco más sobre tu proyecto..."
+English: "Great! To help you set up Handit.ai properly, I'd like to know a bit more about your project..."`;
+
+                const introResponse = await aiService.generateResponse(introPrompt, {
+                    maxTokens: 300
+                });
                 
-                const detectedLang = questionAnalysis.detectedLanguage || 'spanish';
-                const finalAnswer = introMessages[detectedLang] || introMessages.spanish;
+                const finalAnswer = introResponse.answer;
                 
                 return {
                     answer: finalAnswer,
                     sessionId: sessionId,
                     requiresUserInput: true,
                     nextAction: 'wait_for_user_input',
-                    detectedLanguage: detectedLang,
+                    detectedLanguage: questionAnalysis.detectedLanguage,
                     routerDecision: routerDecision,
                     userMessage: userMessage,
                     questionAnalysis: questionAnalysis,
@@ -362,9 +337,6 @@ CRITICAL: Generate questions in the user's detected language!`;
             // Prepare conversation history
             const conversationContext = conversationHistory.messages?.map(msg => `${msg.role}: ${msg.content}`).join('\n') || 'No previous conversation';
             
-            // Extract user's tech stack
-            const userTechStack = this.extractTechStackFromConversation(conversationHistory);
-            
             const phaseRouterPrompt = `You are a Phase Router for Handit.ai. Your job is to determine which phase of Handit.ai setup the user needs help with.
 
 USER MESSAGE: "${userMessage}"
@@ -372,9 +344,6 @@ USER INTENT: ${routerDecision.userIntent}
 
 CONVERSATION HISTORY:
 ${conversationContext}
-
-USER TECH STACK:
-${JSON.stringify(userTechStack, null, 2)}
 
 HANDIT.AI PHASES:
 1. OBSERVABILITY (Phase 1): Setup SDK, tracing, installation, getting started
@@ -384,9 +353,8 @@ HANDIT.AI PHASES:
 PHASE DETERMINATION RULES:
 - If user asks about "setup", "install", "getting started", "tracing", "observability" → OBSERVABILITY
 - If user asks about "evaluation", "quality", "metrics", "assessment", "evaluators" → EVALUATION  
-- If user asks about "optimization", "A/B testing", "self-improving", "prompt optimization" → SELF_IMPROVING
-- If user asks general questions or "what is Handit.ai" → OBSERVABILITY (start with basics)
-- If unclear or mentions multiple phases → OBSERVABILITY (start with foundation)
+- If user asks about "optimization", "A/B testing", "self-improving", "prompt optimization", "prompt engineering", "prompt management" → SELF_IMPROVING
+
 
 CRITICAL: Phase 1 (Observability) is a prerequisite for Phase 2 and 3. Always start with Phase 1 unless user explicitly has it working.
 
@@ -472,10 +440,7 @@ CRITICAL RULES:
             // Prepare conversation history
             const conversationContext = conversationHistory.messages?.map(msg => `${msg.role}: ${msg.content}`).join('\n') || 'No previous conversation';
             
-            // Extract user's tech stack
-            const userTechStack = this.extractTechStackFromConversation(conversationHistory);
-            
-                         const observabilityPrompt = `You are an Observability Expert for Handit.ai Phase 1. Your ONLY job is to guide users through COMPLETE AI Observability and Tracing setup.
+            const observabilityPrompt = `You are an Observability Expert for Handit.ai Phase 1. Your ONLY job is to guide users through COMPLETE AI Observability and Tracing setup.
 
 CRITICAL: Respond in ${phaseDecision.detectedLanguage} language consistently.
 
@@ -485,112 +450,50 @@ USER INTENT: ${routerDecision.userIntent}
 CONVERSATION HISTORY:
 ${conversationContext}
 
-USER TECH STACK:
-${JSON.stringify(userTechStack, null, 2)}
+DOCUMENTATION CONTEXT: ${observabilityContext} (THIS IS THE WHOLE CONTEXT OF THE KNOWLEDGE BASE, INSIDE INCLUDES THE OBSERVABILITY SECTION)
 
-OBSERVABILITY DOCUMENTATION (${observabilityContext.length} documents):
-${observabilityContext.map((doc, i) => `${i + 1}. ${doc.text}`).join('\n\n')}
 
-YOUR MISSION: Provide a COMPLETE 7-step guide for Phase 1 setup:
+CRITICAL ANALYSIS - IDENTIFY USER'S CURRENT OBSERVABILITY STEP:
+Analyze the conversation history to determine exactly which observability setup step the user is currently on or needs help with:
 
-📦 PASO 1: Instalación del SDK
-📝 PASO 2: Obtener Token de Integración
+
+PHASE 1 OBSERVABILITY STEPS (for reference):
+📦 PASO 1: Instalación del SDK (pip install handit-sdk OR npm install @handit.ai/node)
+📝 PASO 2: Obtener Token de Integración (from dashboard settings)
 ⚙️ PASO 3: Crear archivo de configuración (handit_service.py/js)
-🔐 PASO 4: Configurar variables de entorno (.env)
-🚀 PASO 5: Implementar tracking en tu agente (CRÍTICO)
-🔍 PASO 6: Ejemplo completo de código funcional
-✅ PASO 7: Verificar que funciona
+🔐 PASO 4: Configurar variables de entorno (.env file with HANDIT_API_KEY)
+🚀 PASO 5: Implementar tracking en tu agente (CRÍTICO) - start_tracing, track_node, end_tracing
+✅ PASO 6: Verificar que funciona (test and check dashboard)
+
+YOUR MISSION (STEP-BY-STEP CONVERSATIONAL APPROACH):
+1. ANALYZE conversation history to identify their current step
+2. Provide ONLY the NEXT step they need
+3. Give detailed instructions for that ONE step only
+4. Wait for user confirmation before proceeding to next step
+5. If they haven't started → Suggest ONLY Step 1 (installation)
+6. DETECT user's tech stack and provide tech-specific instructions for that step
+7. Also provide examples of how to use the functions in the code
 
 CRITICAL REQUIREMENTS:
-- You MUST provide ALL 7 steps in your response
-- Step 5 is CRITICAL: Show complete implementation of start_tracing, track_node, end_tracing
-- Step 6 is CRITICAL: Show a complete working example with real code
-- Include copy-paste ready code examples
-- Be specific to user's tech stack (Python/JavaScript)
-- Make it practical and immediately actionable
+- ANALYZE conversation history first to detect their progress
+- Provide ONLY ONE step at a time, not the complete guide
+- If they're starting fresh → Only suggest Step 1 (installation) and wait for response
+- If they completed a step → Suggest the NEXT step only
+- Give detailed, copy-paste ready instructions for the current step
+- DETECT user's tech stack from conversation history (Python vs JavaScript)
+- If no tech stack mentioned, ask which one they prefer OR provide both options
+- Make each step practical and immediately actionable
+- Focus ONLY on observability/Phase 1 content
 
-RESPONSE STRUCTURE:
-1. Brief introduction
-2. ALL 7 steps with code examples
-3. Ask for confirmation after showing complete guide
-
-EXAMPLES OF WHAT TO INCLUDE:
-
-For Python:
-\`\`\`python
-# Step 5 & 6: Complete implementation
-from handit_service import tracker
-
-async def my_ai_agent(user_message):
-    # Step 5a: Start tracing
-    tracing_response = tracker.start_tracing(
-        agent_name="my_ai_agent"
-    )
-    execution_id = tracing_response.get("executionId")
-    
-    try:
-        # Your LLM call here
-        response = await your_llm_call(user_message)
-        
-        # Step 5b: Track the operation
-        tracker.track_node(
-            input=user_message,
-            output=response,
-            node_name="main_llm_call",
-            agent_name="my_ai_agent",
-            node_type="llm",
-            execution_id=execution_id
-        )
-        
-        return response
-    finally:
-        # Step 5c: End tracing
-        tracker.end_tracing(
-            execution_id=execution_id,
-            agent_name="my_ai_agent"
-        )
-\`\`\`
-
-For JavaScript:
-\`\`\`javascript
-// Step 5 & 6: Complete implementation
-import { startTracing, trackNode, endTracing } from '@handit.ai/node';
-
-async function myAIAgent(userMessage) {
-    // Step 5a: Start tracing
-    const tracingResponse = await startTracing({
-        agentName: 'my_ai_agent'
-    });
-    const executionId = tracingResponse.executionId;
-    
-    try {
-        // Your LLM call here
-        const response = await yourLLMCall(userMessage);
-        
-        // Step 5b: Track the operation
-        await trackNode({
-            input: userMessage,
-            output: response,
-            nodeName: 'main_llm_call',
-            agentName: 'my_ai_agent',
-            nodeType: 'llm',
-            executionId
-        });
-        
-        return response;
-    } finally {
-        // Step 5c: End tracing
-        await endTracing({
-            executionId,
-            agentName: 'my_ai_agent'
-        });
-    }
-}
-\`\`\`
+RESPONSE STRUCTURE (CONVERSATIONAL):
+1. Brief greeting acknowledging their current progress (if any)
+2. Identify which step they need next (or Step 1 if starting)
+3. Provide detailed instructions for THAT ONE step only
+4. Ask for confirmation when they complete it before moving to next step
 
 CRITICAL: You MUST include complete code examples that users can copy-paste and adapt to their specific use case. Don't just mention the functions, show them how to use them in a complete workflow.
 
-Generate the COMPLETE 7-step guide now.`;
+`;
 
             const observabilityResponse = await aiService.generateResponse(observabilityPrompt, {
                 maxTokens: 1200
@@ -605,7 +508,6 @@ Generate the COMPLETE 7-step guide now.`;
                 requiresUserInput: true,
                 nextAction: 'wait_for_step_confirmation',
                 detectedLanguage: phaseDecision.detectedLanguage,
-                userTechStack: userTechStack,
                 filteredContext: observabilityContext,
                 nodeType: "observability_llm_response"
             };
@@ -650,8 +552,9 @@ USER INTENT: ${routerDecision.userIntent}
 CONVERSATION HISTORY:
 ${conversationContext}
 
-EVALUATION DOCUMENTATION (${evaluationContext.length} documents):
-${evaluationContext.map((doc, i) => `${i + 1}. ${doc.text}`).join('\n\n')}
+DOCUMENTATION CONTEXT: ${evaluationContext} (THIS IS THE WHOLE CONTEXT OF THE KNOWLEDGE BASE, INSIDE INCLUDES THE EVALUATION SECTION)
+
+
 
 YOUR SPECIALIZATION - PHASE 2: QUALITY EVALUATION
 ✅ Connect Evaluation Models (OpenAI, other LLMs)
@@ -736,8 +639,8 @@ USER INTENT: ${routerDecision.userIntent}
 CONVERSATION HISTORY:
 ${conversationContext}
 
-OPTIMIZATION DOCUMENTATION (${optimizationContext.length} documents):
-${optimizationContext.map((doc, i) => `${i + 1}. ${doc.text}`).join('\n\n')}
+DOCUMENTATION CONTEXT ${optimizationContext}, (THIS IS THE WHOLE CONTEXT OF THE KNOWLEDGE BASE, INSIDE INCLUDES THE SELF-IMPROVING SECTION)
+
 
 YOUR SPECIALIZATION - PHASE 3: SELF-IMPROVING AI
 ✅ Connect Optimization Models
@@ -790,216 +693,6 @@ Generate a complete, step-by-step response for Phase 3 optimization setup.`;
     }
 
     /**
-     * Step-by-Step Guide LLM - Guides user through Handit.ai setup phases
-     * @param {string} userMessage - Current user message
-     * @param {Object} conversationHistory - Conversation history
-     * @param {string} sessionId - Session identifier
-     * @param {Object} routerDecision - Router decision data
-     * @param {Array} availableContext - Available context from handitKnowledgeBase
-     * @param {Object} questionAnalysis - Question analysis data
-     * @param {Object} userAnswers - User answers to questions (null if no questions)
-     * @returns {Promise<Object>} Step-by-step guide response
-     */
-    async stepByStepGuide(userMessage, conversationHistory, sessionId, routerDecision, availableContext, questionAnalysis, userAnswers) {
-        try {
-            console.log('👨‍🏫 Step-by-Step Guide: Generando guía personalizada para el usuario');
-            
-            // Use the available context directly
-            const contextDocuments = availableContext;
-            
-            console.log(`📚 CONTEXTO DISPONIBLE: ${contextDocuments.length} documentos de handitKnowledgeBase`);
-            
-            // Prepare conversation history
-            const conversationContext = conversationHistory.messages?.map(msg => `${msg.role}: ${msg.content}`).join('\n') || 'No previous conversation';
-            
-            // Extract user's tech stack from answers or conversation
-            let userTechStack = {};
-            if (userAnswers) {
-                // TODO: Parse user answers to extract tech stack
-                userTechStack = this.extractTechStackFromAnswers(userAnswers);
-            } else {
-                // Extract from conversation history if available
-                userTechStack = this.extractTechStackFromConversation(conversationHistory);
-            }
-            
-            console.log('\n🔧 INFORMACIÓN TÉCNICA DEL USUARIO:');
-            console.log(`- Lenguaje detectado: ${questionAnalysis.detectedLanguage || 'spanish'}`);
-            console.log(`- Stack tecnológico: ${JSON.stringify(userTechStack, null, 2)}`);
-            
-                        console.log('\n📚 CONTEXTO DISPONIBLE PARA LA GUÍA:');
-            console.log(`- Documentos de handitKnowledgeBase: ${contextDocuments.length}`);
-            console.log(`- Historial de conversación: ${conversationHistory.messages?.length || 0} mensajes`);
-            console.log(`- Contexto completo disponible`);
-            
-            const stepByStepPrompt = `You are a Step-by-Step Guide for Handit.ai setup. Your job is to guide the user through the complete Handit.ai setup process in their detected language.
-
-CRITICAL: Respond in ${questionAnalysis.detectedLanguage || 'spanish'} language consistently.
-
-USER MESSAGE: "${userMessage}"
-USER INTENT: ${routerDecision.userIntent}
-
-CONVERSATION HISTORY:
-${conversationContext}
-
-USER TECH STACK:
-${JSON.stringify(userTechStack, null, 2)}
-
-HANDIT.AI DOCUMENTATION CONTEXT (${contextDocuments.length} documents):
-${contextDocuments}
-
-HANDIT.AI SETUP PHASES (Prerequisites Matter!):
-1. OBSERVABILIDAD/TRACING (REQUIRED FIRST) - Most complex, requires code integration
-   - Install SDK
-   - Initialize tracker
-   - Add tracing to LLM calls and tools
-   - Verify data is flowing
-   
-2. EVALUACIÓN (Requires Phase 1) - Dashboard configuration
-   - Connect evaluation models
-   - Create evaluators
-   - Associate evaluators to LLM nodes
-   - Monitor results
-   
-3. SELF-IMPROVING (Requires Phase 1 & 2) - Dashboard configuration  
-   - Connect optimization models
-   - Monitor optimization results
-   - Deploy optimizations
-
-AVAILABLE CONTEXT:
-- Complete handitKnowledgeBase with all setup phases
-- Setup examples for Python and JavaScript
-- Comprehensive documentation for all features
-
-YOUR MISSION:
-1. Determine which phase(s) the user needs based on their request and context
-2. Start with Phase 1 (Observabilidad) if they haven't done it yet
-3. Provide specific, actionable step-by-step guidance
-4. Include code examples tailored to their tech stack
-5. Ask for confirmation after each major step
-6. Offer additional help with code architecture
-
-RESPONSE STRUCTURE:
-- Start with a friendly introduction explaining you'll guide them step-by-step
-- Identify which phase(s) they need
-- Provide the first concrete step with code example
-- Ask for confirmation before proceeding
-- Offer additional architectural help
-
-EXAMPLES OF TECH-SPECIFIC GUIDANCE:
-- Python + LangChain: Show handit.py initialization and LangChain integration
-- JavaScript + OpenAI: Show Node.js setup and OpenAI wrapper
-- Python + OpenAI: Show Python SDK setup and OpenAI integration
-
-LANGUAGE EXAMPLES:
-Spanish: "Te guiaré paso a paso para configurar Handit.ai exitosamente. Primero necesitamos..."
-English: "I'll guide you step-by-step to successfully set up Handit.ai. First we need to..."
-
-CRITICAL RULES:
-- Always start with Observabilidad unless they explicitly have it working
-- Provide concrete, copy-paste code examples
-- Ask for confirmation after each step
-- Adapt examples to their specific tech stack
-- Be encouraging and supportive
-- Offer help with code architecture/structure
-- Respond in the user's detected language
-- Reference the extracted documentation context when relevant`;
-
-            const stepByStepResponse = await aiService.generateResponse(stepByStepPrompt, {
-                maxTokens: 1500
-            });
-            
-            console.log('👨‍🏫 Step-by-Step Guide LLM Response:', JSON.stringify(stepByStepResponse, null, 2));
-            
-            // Store all context for next interaction
-            const completeContext = {
-                userMessage,
-                conversationHistory,
-                routerDecision,
-                questionAnalysis,
-                userTechStack,
-                availableContext: contextDocuments,
-                detectedLanguage: questionAnalysis.detectedLanguage || 'spanish'
-            };
-            
-            console.log('\n🎯 GUÍA PASO A PASO GENERADA');
-            console.log(`- Fase identificada: Observabilidad (prerequisito)`);
-            console.log(`- Stack del usuario: ${userTechStack.language || 'unknown'} + ${userTechStack.framework || 'unknown'}`);
-            console.log(`- Idioma de respuesta: ${questionAnalysis.detectedLanguage || 'spanish'}`);
-            console.log(`- Documentos utilizados: ${contextDocuments.length}`);
-            
-            return {
-                answer: stepByStepResponse.answer,
-                sessionId: sessionId,
-                requiresUserInput: true,
-                nextAction: 'wait_for_step_confirmation',
-                detectedLanguage: questionAnalysis.detectedLanguage || 'spanish',
-                currentPhase: 'observabilidad',
-                userTechStack: userTechStack,
-                completeContext: completeContext,
-                nodeType: "step_by_step_guide_started"
-            };
-            
-        } catch (error) {
-            console.error('Error in Step-by-Step Guide:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Extract tech stack from user answers
-     * @param {Object} userAnswers - User answers to questions
-     * @returns {Object} Extracted tech stack information
-     */
-    extractTechStackFromAnswers(userAnswers) {
-        // TODO: Implement parsing of user answers
-        // For now, return default structure
-        return {
-            language: 'unknown',
-            framework: 'unknown',
-            environment: 'unknown'
-        };
-    }
-
-    /**
-     * Extract tech stack from conversation history
-     * @param {Object} conversationHistory - Conversation history
-     * @returns {Object} Extracted tech stack information
-     */
-    extractTechStackFromConversation(conversationHistory) {
-        const messages = conversationHistory.messages || [];
-        const allText = messages.map(msg => msg.content).join(' ').toLowerCase();
-        
-        const techStack = {
-            language: 'unknown',
-            framework: 'unknown',
-            environment: 'unknown'
-        };
-        
-        // Detect programming language
-        if (allText.includes('python') || allText.includes('py')) {
-            techStack.language = 'python';
-        } else if (allText.includes('javascript') || allText.includes('js') || allText.includes('node')) {
-            techStack.language = 'javascript';
-        }
-        
-        // Detect framework
-        if (allText.includes('langchain')) {
-            techStack.framework = 'langchain';
-        } else if (allText.includes('openai')) {
-            techStack.framework = 'openai';
-        }
-        
-        // Detect environment
-        if (allText.includes('local') || allText.includes('localhost')) {
-            techStack.environment = 'local';
-        } else if (allText.includes('cloud') || allText.includes('aws') || allText.includes('gcp')) {
-            techStack.environment = 'cloud';
-        }
-        
-        return techStack;
-    }
-
-    /**
      * Generate polite response for off-topic queries
      * @param {string} userMessage - Current user message
      * @param {string} sessionId - Session identifier
@@ -1018,7 +711,7 @@ USER INTENT: ${routerDecision.userIntent}
 Generate a polite response that:
 1. Acknowledges their question respectfully
 2. Explains that you're specifically designed to help with Handit.ai
-3. Mentions what you CAN help with (setup, features, integration, etc.)
+3. Mentions what you CAN help with (setup, explore features, integration, etc.)
 4. Suggests they ask about Handit.ai topics instead
 
 RESPONSE GUIDELINES:
@@ -1032,7 +725,7 @@ EXAMPLES OF WHAT YOU CAN HELP WITH:
 - Setting up Handit.ai in your tech stack
 - Configuring tracing for your AI agents
 - Understanding evaluation features
-- Prompt optimization and A/B testing
+- Prompt optimization
 - Troubleshooting integration issues
 
 Generate ONLY the response text, not JSON.`;

@@ -57,8 +57,7 @@ const initializePinecone = async () => {
  * @property {string} metadata.topic - Specific topic
  */
 const handitKnowledgeBase = [
-    {
-        text: `Handit.ai Overview
+    `Handit.ai Overview
 
 Handit.ai is an AI-powered platform that helps teams build and deploy intelligent applications at scale. It is the Open Source Engine that Auto-Improves Your AI.
 
@@ -73,10 +72,9 @@ Key Features:
 - Impact metrics: Links AI tweaks to cost savings, conversions, and user satisfaction
 - Proven results: ASPE.ai saw +62.3% accuracy and +97.8% success rate in 48 hours
 
-Watch how to transform your AI from static to self-improving in minutes with our 5-minute demo.`
-    },
-    {
-        text: `AI Application Challenges and Solutions
+Watch how to transform your AI from static to self-improving in minutes with our 5-minute demo.`,
+
+    `AI Application Challenges and Solutions
 
 Common AI Pipeline Problems:
 Many developers face recurring issues with AI applications. Prompts need constant tweaking, AI responses can be unpredictable, and systems sometimes produce unexpected outputs or fail completely. These issues often manifest as:
@@ -94,10 +92,9 @@ Benefits:
 - Prevents unexpected AI behavior
 - Automates quality control
 - Provides real-time failure detection
-- Enables continuous AI improvement`
-    },
-    {
-        text: `Real-Time Monitoring Capabilities
+- Enables continuous AI improvement`,
+
+    `Real-Time Monitoring Capabilities
 
 Handit.ai provides comprehensive real-time monitoring for AI systems:
 
@@ -113,10 +110,9 @@ Benefits:
 - Detect anomalies and drift automatically
 - Set custom real-time alerts for failures and threshold breaches
 
-The monitoring system provides complete visibility into your AI operations, allowing you to track performance trends, identify issues early, and maintain system reliability.`
-    },
-    {
-        text: `Evaluation and Quality Assessment
+The monitoring system provides complete visibility into your AI operations, allowing you to track performance trends, identify issues early, and maintain system reliability.`,
+
+    `Evaluation and Quality Assessment
 
 Handit.ai offers comprehensive evaluation capabilities for AI systems:
 
@@ -133,10 +129,9 @@ Key Benefits:
 - Receive automated quality scores in real time
 - Feed results directly into optimization workflows automatically
 
-The evaluation system enables continuous quality monitoring and improvement of AI applications without manual intervention.`
-    },
-    {
-        text: `Prompt Management and AI CI/CD
+The evaluation system enables continuous quality monitoring and improvement of AI applications without manual intervention.`,
+
+    `Prompt Management and AI CI/CD
 
 Handit.ai provides comprehensive prompt management and continuous integration/deployment for AI:
 
@@ -164,10 +159,9 @@ Benefits:
 - Compare ROI metrics to identify top performers
 - Promote winning variants without manual effort
 - Track prompt performance trends over time
-- Enable team collaboration on prompt development`
-    },
-    {
-        text: `Getting Started with Handit.ai
+- Enable team collaboration on prompt development`,
+
+    `Getting Started with Handit.ai
 
 Quick Integration:
 Handit.ai is designed for easy integration into existing technology stacks. The platform can be integrated in minutes, allowing teams to start benefiting from AI optimization immediately.
@@ -188,15 +182,8 @@ Support and Resources:
 For assistance, users can check GitHub Issues or contact the support team directly. The platform is open source and community-driven.
 
 The quickstart guide provides step-by-step instructions for initial setup and configuration.`,
-        metadata: {
-            category: "getting_started",
-            intent: "onboarding_inquiry",
-            topic: "integration_setup",
-            phase: "general"
-        }
-    },
-    {
-        text: `Handit.ai Setup Overview: The Complete Journey
+
+    `Handit.ai Setup Overview: The Complete Journey
 
 Here's what we'll accomplish in three phases:
 
@@ -214,15 +201,8 @@ The Result: Complete visibility into performance with automated optimization rec
 Prerequisites
 Before we start, make sure you have:
 - A Handit.ai Account, you can create one in the [Handit.ai Site](https://dashboard.handit.ai/auth/custom/sign-up)`,
-        metadata: {
-            category: "setup",
-            intent: "setup_overview",
-            topic: "complete_journey",
-            phase: "overview"
-        }
-    },
-    {
-        text: `Phase 1: AI Observability
+
+    `Phase 1: AI Observability
         
 This is the Python Setup fot Observability.
 
@@ -263,16 +243,8 @@ tracker = HanditTracker()  # Creates a global tracker instance for consistent tr
  
 # Configure with your API key from environment variables
 tracker.config(api_key=os.getenv("HANDIT_API_KEY"))  # Sets up authentication for Handit.ai services`,
-        metadata: {
-            category: "setup",
-            intent: "technical_setup",
-            topic: "observability_python",
-            phase: "phase_1",
-            language: "python"
-        }
-    },
-    {
-        text: `Phase 1: AI Observability - Python Set up your start tracing, Track LLMs calls, tools in your workflow, Set up your end tracing Example
+
+    `Phase 1: AI Observability - Python Set up your start tracing, Track LLMs calls, tools in your workflow, Set up your end tracing Example
 
 This example uses three main Handit.ai tracing functions:
 
@@ -370,16 +342,8 @@ async def main():
 Important: Each node in your workflow should have a unique node_name to properly track its execution in the dashboard.
 
 Phase 1 Complete! 🎉 You now have full observability with every operation, timing, input, output, and error visible in your dashboard.`,
-        metadata: {
-            category: "setup",
-            intent: "code_implementation",
-            topic: "observability_python_example",
-            phase: "phase_1",
-            language: "python"
-        }
-    },
-    {
-        text: `Phase 1: AI Observability - JavaScript Setup
+
+    `Phase 1: AI Observability - JavaScript Setup
 
 This is the JavaScript Setup fot Observability.
 
@@ -410,16 +374,8 @@ import { config } from '@handit.ai/node';
 config({ 
     apiKey: process.env.HANDIT_API_KEY  // Sets up authentication for Handit.ai services
 });`,
-        metadata: {
-            category: "setup",
-            intent: "technical_setup",
-            topic: "observability_javascript",
-            phase: "phase_1",
-            language: "javascript"
-        }
-    },
-    {
-        text: `Phase 1: AI Observability - JavaScript Implementation Example
+
+    `Phase 1: AI Observability - JavaScript Implementation Example
 
 The example uses three main Handit.ai tracing functions:
 
@@ -517,16 +473,8 @@ async function main() {
 Important: Each node in your workflow should have a unique node_name to properly track its execution in the dashboard.
 
 Phase 1 Complete! 🎉 You now have full observability with every operation, timing, input, output, and error visible in your dashboard.`,
-        metadata: {
-            category: "setup",
-            intent: "code_implementation",
-            topic: "observability_javascript_example",
-            phase: "phase_1",
-            language: "javascript"
-        }
-    },
-    {
-        text: `Phase 2: Quality Evaluation Setup
+
+    `Phase 2: Quality Evaluation Setup
 
 Now let's add automated evaluation to continuously assess quality across multiple dimensions.
 
@@ -593,15 +541,8 @@ View real-time evaluation results in:
 - Agent Performance: Quality trends over time
 
 Phase 2 Complete! 🎉 Continuous evaluation is now running across multiple quality dimensions with real-time insights into performance trends.`,
-        metadata: {
-            category: "setup",
-            intent: "evaluation_setup",
-            topic: "quality_evaluation",
-            phase: "phase_2"
-        }
-    },
-    {
-        text: `Phase 3: Self-Improving AI Setup
+
+    `Phase 3: Self-Improving AI Setup
 
 Finally, let's enable automatic optimization that generates better prompts and provides proven improvements.
 
@@ -675,15 +616,8 @@ const response = await openai.chat.completions.create({
 });
 
 Phase 3 Complete! 🎉 You now have a self-improving AI that automatically detects quality issues, generates better prompts, tests them in the background, and provides proven improvements.`,
-        metadata: {
-            category: "setup",
-            intent: "optimization_setup",
-            topic: "self_improving_ai",
-            phase: "phase_3"
-        }
-    },
-    {
-        text: `Handit.ai Setup Complete - What You've Accomplished
+
+    `Handit.ai Setup Complete - What You've Accomplished
 
 Congratulations! You now have a complete AI observability and optimization system:
 
@@ -703,16 +637,9 @@ Congratulations! You now have a complete AI observability and optimization syste
 - Background A/B testing with statistical confidence
 - Production-ready improvements delivered via SDK
 
-Your AI system now automatically monitors itself, evaluates its performance, and continuously improves without manual intervention. The complete setup provides end-to-end visibility and optimization for maximum AI performance.`,
-        metadata: {
-            category: "setup",
-            intent: "completion_summary",
-            topic: "final_accomplishments",
-            phase: "complete"
-        }
-    }
+Your AI system now automatically monitors itself, evaluates its performance, and continuously improves without manual intervention. The complete setup provides end-to-end visibility and optimization for maximum AI performance.`
 ];
-
+       
 module.exports = {
     initializePinecone,
     handitKnowledgeBase
