@@ -7,7 +7,10 @@
 const { aiService } = require('./aiService');
 const ConversationService = require('./conversationService');
 
+
 class AgenticSystem {
+
+
     constructor() {
         this.conversationService = new ConversationService();
     }
@@ -63,59 +66,38 @@ class AgenticSystem {
      */
     async routerAgent(userMessage, conversationHistory, sessionId) {
         try {
+
+             // Import handitKnowledgeBase from pinecone.js
+             const { handitKnowledgeBase } = require('../config/pinecone');
+            
+             // Use handitKnowledgeBase directly as context
+             const availableContext = handitKnowledgeBase;
+
             console.log('🚦 Router Agent: Analyzing if topic is about Handit.ai');
 
             // Create conversation context for router
             const conversationContext = conversationHistory.messages?.map(msg => `${msg.role}: ${msg.content}`).join('\n') || 'No previous conversation';
 
-            const routerPrompt = `You are a Router Agent for Handit.ai Copilot. Your job is to decide if the user's question is about Handit.ai or not.
+            const routerPrompt = `You are a Router Agent. Determine if the user's message is related to the topics covered in the available documentation or completely unrelated.
 
-HANDIT.AI TOPICS INCLUDE:
-- Setup and configuration of Handit.ai (setup, settear, configurar, instalar), everything related to dev topic, code
-- Installation of SDKs (Python, JavaScript) or any other language
-- Integration with tech stacks (LangChain, OpenAI, etc.)
-- Features: Tracing, Evaluation, Optimization, CI/CD, A/B testing, self-optimization, prompt management, agent monitoring and observability, LLM performance evaluation, prompt management and self-optimization, A/B testing for AI, Troubleshooting Handit.ai issues, Getting started with Handit.ai, Questions about Handit.ai documentation
-- Agent monitoring and observability
-- LLM performance evaluation
-- Prompt management and self-optimization
-- A/B testing for AI
-- Troubleshooting Handit.ai issues
-- Getting started with Handit.ai
-- Questions about Handit.ai documentation
+USER MESSAGE: "${userMessage}"
 
-IMPORTANT: If the user asks about "setup", "settear", "configurar", "instalar", "integrar", "configuración", "installation", "getting started", or any variation, even without mentioning Handit.ai explicitly, assume it's about Handit.ai setup since this is a Handit.ai assistant.
+AVAILABLE DOCUMENTATION CONTEXT:
+${availableContext}
 
-CONVERSATION HISTORY:
-${conversationContext}
-
-CURRENT USER MESSAGE: "${userMessage}"
+TASK: Check if the user's question is about ANY topic mentioned or covered in the documentation above.
 
 DECISION RULES:
-1. If the message is about Handit.ai topics → Return "HANDIT_AI"
-2. If the message mentions setup/configuration terms (even without "Handit.ai") or HANDIT.AI TOPICS explained above → Return "HANDIT_AI" 
-3. If the message is clearly about unrelated topics (pizza, weather, general chat, etc.) → Return "OFF_TOPIC"
+- If the user's message relates to ANY topic, concept, feature, or process mentioned in the documentation → Return "HANDIT_AI"
+- If the user's message is clearly about something NOT covered in the documentation (weather, food, general chat, etc.) → Return "OFF_TOPIC"
 
 EXAMPLES:
-- "como puedo settear" → "HANDIT_AI" (setup/configuration)
-- "ayuda con configuración" → "HANDIT_AI" (setup/configuration)
-- "how to install" → "HANDIT_AI" (setup/configuration)
-- "quiero ordenar pizza" → "OFF_TOPIC" (unrelated)
-- "que tiempo hace" → "OFF_TOPIC" (unrelated)
+- Question about something mentioned in the docs → "HANDIT_AI"
+- "what's the weather?" → "OFF_TOPIC" (not in docs)
+- "how to cook pasta?" → "OFF_TOPIC" (not in docs)
 
-RESPONSE FORMAT (JSON):
-{
-  "decision": "HANDIT_AI" or "OFF_TOPIC",
-  "confidence": 0.95,
-  "reasoning": "Brief explanation of why this decision was made",
-  "userIntent": "Brief description of what the user wants"
-}
-
-CRITICAL RULES:
-- Only return JSON format
-- Be very specific about the decision
-- Consider both current message and conversation history
-- ASSUME setup/configuration questions are about Handit.ai unless clearly stated otherwise
-- Be inclusive of Spanish terms: settear, configurar, instalar, integrar`;
+Return ONLY valid JSON:
+{"decision": "HANDIT_AI", "reasoning": "brief reason"}`;
 
             const routerResponse = await aiService.generateResponse(routerPrompt, {
                 maxTokens: 300
@@ -125,14 +107,37 @@ CRITICAL RULES:
 
             let routerDecision;
             try {
-                routerDecision = JSON.parse(routerResponse.answer);
+                let jsonText = routerResponse.answer.trim();
+                
+                // Extract JSON if wrapped in other text
+                const jsonMatch = jsonText.match(/\{[^}]*\}/);
+                if (jsonMatch) {
+                    jsonText = jsonMatch[0];
+                }
+                
+                routerDecision = JSON.parse(jsonText);
+                
+                // Ensure decision has the required format
+                if (!routerDecision.decision) {
+                    throw new Error('Missing decision field');
+                }
+                
+                // Validate decision value
+                if (!['HANDIT_AI', 'OFF_TOPIC'].includes(routerDecision.decision)) {
+                    console.warn('Invalid decision value:', routerDecision.decision);
+                    routerDecision.decision = 'HANDIT_AI'; // Default to HANDIT_AI
+                }
+                
             } catch (error) {
-                console.warn('Router JSON parse failed, using fallback');
+                console.warn('Router JSON parse failed, defaulting to HANDIT_AI:', error.message);
+                console.log('Raw router response:', routerResponse.answer);
+                
+                // Default to HANDIT_AI since this is a Handit.ai assistant
                 routerDecision = {
-                    decision: "OFF_TOPIC",
-                    confidence: 0.5,
-                    reasoning: "Could not parse router response",
-                    userIntent: "Unknown"
+                    decision: "HANDIT_AI",
+                    confidence: 0.7,
+                    reasoning: "Defaulting to Handit.ai topic due to parse error",
+                    userIntent: "Likely asking about Handit.ai"
                 };
             }
 
@@ -178,17 +183,42 @@ CRITICAL RULES:
             
                         console.log('\n🤔 EVALUANDO NECESIDAD DE PREGUNTAS AL USUARIO:');
             console.log(`- Pregunta del usuario: "${userMessage}"`);
-            console.log(`- Contexto disponible: ${availableContext}`);
+            console.log(`- Tipo de contexto disponible: ${typeof availableContext}`);
+            console.log(`- Es array: ${Array.isArray(availableContext)}`);
+            if (Array.isArray(availableContext)) {
+                console.log(`- Número de documentos: ${availableContext.length}`);
+            }
             console.log(`- Contexto completo de handitKnowledgeBase`);
             
-            const questionAnalysisPrompt = `You are a Context Questioner for Handit.ai. You ask ONLY 3 simple questions, and ALL questions are OPTIONAL.
+            const questionAnalysisPrompt = `You are a Context Questioner for Handit.ai. Analyze if the user wants help with observability/setup topics from the documentation.
 
 USER MESSAGE: "${userMessage}"
 CONVERSATION HISTORY: ${conversationContext}
 
-IMPORTANT: 
-1. DETECT the user's language (Spanish/English) from their message
-2. Check if you already asked questions before and user ignored them → If YES, set needsUserInput to FALSE
+AVAILABLE DOCUMENTATION: 
+${availableContext}
+
+TASK: Analyze if the user's message is asking about ANY observability, setup, installation, configuration, or getting started.
+
+1. DETECT user's language (Spanish/English) from their message
+2. CHECK: Is the user asking about observability/setup topics from the documentation?
+   - Look for questions about: setup, installation, configuration, tracing, monitoring, SDK setup, getting started, integration
+   - If user wants help with ANY of these topics → set needsUserInput = TRUE and ask 3 questions
+   - If user is just asking general questions about what Handit is → set needsUserInput = FALSE
+3. ANALIZE THE CONVERSATION HISTORY AND CHECK IF THERE ARE ANY OF THESE QUESTIONS ASKED TO THE USER.
+   - If you there are some questions already asked to the user, set needsUserInput = FALSE
+   - If user just ignored these questions, set needsUserInput = FALSE
+   - If user didnt answer all your questions, set needsUserInput = FALSE
+   - If user answered all your questions, set needsUserInput = FALSE
+   - If user is asking about something else, set needsUserInput = FALSE
+   - If user is asking about something that is not in the documentation, set needsUserInput = FALSE
+   - If user is already in on-boarding process, set needsUserInput = FALSE
+ 
+4. IF YOU HAVE ALREADY ASKED THE USER THESE QUESTIONS, SET needsUserInput = FALSE
+5. ANALIZE THE CONVERSATION HISTORY and user Message. IF USER IS ALREADY IN ON-BOARDING PROCESS, SET needsUserInput = FALSE
+
+
+QUESTIONS TO ASK (when needsUserInput = TRUE):
 
 SPANISH:
 - "¿Sobre qué es tu aplicación IA, qué es lo que hace?"
@@ -200,27 +230,29 @@ ENGLISH:
 - "What programming language is it built in?"
 - "What framework are you using?"
 
-CRITICAL RULES:
-- ALL questions are OPTIONAL
-- If user ignored questions before → set needsUserInput to FALSE
-- If no previous questions found → ask the 3 questions in user's language
-- Always proceed to next node, questions are just nice-to-have
+EXAMPLES:
+- "quiero settear handit" → needsUserInput: TRUE (wants setup help)
+- "como configurar handit" → needsUserInput: TRUE (wants configuration help)
+- "i want to connect my agent to handit" → needsUserInput: TRUE (wants integration help)
+- "help me with handit observability" → needsUserInput: TRUE (wants observability help)
+- "what is handit?" → needsUserInput: FALSE (just asking what it is)
+- "tell me about handit features" → needsUserInput: FALSE (just asking about features)
+
+CRITICAL: Base your decision on whether they want PRACTICAL HELP with setup/observability topics from the documentation, not just general information.
 
 RESPONSE FORMAT (JSON):
 {
   "detectedLanguage": "spanish|english",
   "needsUserInput": true/false,
-  "reasoning": "Brief reason",
+  "reasoning": "Brief reason - is user asking for setup/observability help?",
   "questions": [
     {
       "question": "question text in user language",
       "category": "application_context|technical_stack",
-      "importance": "optional",
-      "purpose": "To provide better guidance"
+      "importance": "helpful",
+      "purpose": "To provide better setup guidance"
     }
-  ],
-  "canAnswerWithoutQuestions": true,
-  "contextCompleteness": "sufficient"
+  ]
 }`;
 
             const questionAnalysisResponse = await aiService.generateResponse(questionAnalysisPrompt, {
@@ -231,25 +263,138 @@ RESPONSE FORMAT (JSON):
             
             let questionAnalysis;
             try {
-                questionAnalysis = JSON.parse(questionAnalysisResponse.answer);
+                let jsonText = questionAnalysisResponse.answer.trim();
+                
+                // Extract JSON if wrapped in other text
+                const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    jsonText = jsonMatch[0];
+                }
+                
+                questionAnalysis = JSON.parse(jsonText);
             } catch (error) {
                 console.warn('Question analysis JSON parse failed, using fallback');
+                console.log('Raw question analysis response:', questionAnalysisResponse.answer);
+                
+                // Detect if it's a setup/observability question by analyzing the context
+                // Look for observability/setup related terms that would be in the documentation
+                const observabilityTerms = ['setup', 'settear', 'configurar', 'instalar', 'install', 'configure', 'connect', 'integration', 'tracing', 'observability', 'monitoring', 'SDK', 'getting started', 'empezar', 'how to', 'como puedo', 'ayuda'];
+                
+                // Convert availableContext to string for searching
+                let contextString = '';
+                if (availableContext) {
+                    if (typeof availableContext === 'string') {
+                        contextString = availableContext;
+                    } else if (Array.isArray(availableContext)) {
+                        // Join array of documentation strings
+                        contextString = availableContext.join('\n\n');
+                    } else if (typeof availableContext === 'object') {
+                        contextString = JSON.stringify(availableContext);
+                    } else {
+                        contextString = String(availableContext);
+                    }
+                }
+                
+                const isObservabilityQuestion = observabilityTerms.some(term => 
+                    userMessage.toLowerCase().includes(term.toLowerCase()) ||
+                    (contextString && contextString.toLowerCase().includes(term.toLowerCase()) && userMessage.toLowerCase().includes('handit'))
+                );
+                
+                // Detect language
+                const spanishWords = ['settear', 'configurar', 'instalar', 'como', 'que', 'es', 'tu', 'quiero', 'ayuda'];
+                const isSpanish = spanishWords.some(word => userMessage.toLowerCase().includes(word));
+                
                 questionAnalysis = {
-                    detectedLanguage: "spanish", // Default to Spanish based on user message
-                    needsUserInput: false,
-                    reasoning: "Could not parse question analysis",
-                    questions: [],
-                    canAnswerWithoutQuestions: true,
-                    contextCompleteness: "partial"
+                    detectedLanguage: isSpanish ? "spanish" : "english",
+                    needsUserInput: isObservabilityQuestion,
+                    reasoning: `Fallback: Observability/setup topics ${isObservabilityQuestion ? 'detected' : 'not detected'}`,
+                    questions: isObservabilityQuestion ? [
+                        {
+                            question: isSpanish ? "¿Sobre qué es tu aplicación IA, qué es lo que hace?" : "What is your AI application about, what does it do?",
+                            category: "application_context",
+                            importance: "helpful",
+                            purpose: "To provide better setup guidance"
+                        },
+                        {
+                            question: isSpanish ? "¿En qué lenguaje de programación está construido?" : "What programming language is it built in?",
+                            category: "technical_stack",
+                            importance: "helpful", 
+                            purpose: "To provide better setup guidance"
+                        },
+                        {
+                            question: isSpanish ? "¿Qué framework estás usando?" : "What framework are you using?",
+                            category: "technical_stack",
+                            importance: "helpful",
+                            purpose: "To provide better setup guidance"
+                        }
+                    ] : []
                 };
             }
             
             console.log('\n🎯 ANÁLISIS DE PREGUNTAS:');
+            console.log(`- Mensaje del usuario: "${userMessage}"`);
             console.log(`- Idioma detectado: ${questionAnalysis.detectedLanguage || 'unknown'}`);
             console.log(`- Necesita input del usuario: ${questionAnalysis.needsUserInput ? 'SÍ' : 'NO'}`);
-            console.log(`- Puede responder sin preguntas: ${questionAnalysis.canAnswerWithoutQuestions ? 'SÍ' : 'NO'}`);
-            console.log(`- Completitud del contexto: ${questionAnalysis.contextCompleteness}`);
+            console.log(`- Número de preguntas: ${questionAnalysis.questions?.length || 0}`);
             console.log(`- Razonamiento: ${questionAnalysis.reasoning}`);
+            
+            // Check if user is asking about observability/setup topics from documentation
+            const observabilityTerms = ['setup', 'settear', 'configurar', 'instalar', 'install', 'configure', 'connect', 'integration', 'tracing', 'observability', 'monitoring', 'SDK', 'getting started', 'empezar', 'how to', 'como puedo', 'ayuda'];
+            
+            // Convert availableContext to string for searching
+            let contextString = '';
+            if (availableContext) {
+                if (typeof availableContext === 'string') {
+                    contextString = availableContext;
+                } else if (Array.isArray(availableContext)) {
+                    // Join array of documentation strings
+                    contextString = availableContext.join('\n\n');
+                } else if (typeof availableContext === 'object') {
+                    contextString = JSON.stringify(availableContext);
+                } else {
+                    contextString = String(availableContext);
+                }
+            }
+            
+            const foundTerms = observabilityTerms.filter(term => 
+                userMessage.toLowerCase().includes(term.toLowerCase()) ||
+                (contextString && contextString.toLowerCase().includes(term.toLowerCase()) && userMessage.toLowerCase().includes('handit'))
+            );
+            console.log(`- Términos de observabilidad/setup encontrados: [${foundTerms.join(', ')}]`);
+            console.log(`- Pregunta relacionada con documentación: ${foundTerms.length > 0 ? 'SÍ' : 'NO'}`);
+            console.log(`- Longitud del contexto convertido: ${contextString.length} caracteres`);
+            console.log(`- Debería hacer preguntas: ${foundTerms.length > 0 ? 'SÍ' : 'NO'}`);
+            
+            // OVERRIDE: If user is asking about observability/setup topics but LLM said no, force questions
+            if (foundTerms.length > 0 && (!questionAnalysis.needsUserInput || questionAnalysis.questions.length === 0)) {
+                console.log('\n🔧 OVERRIDE: Forzando preguntas porque se detectó consulta sobre observabilidad/setup');
+                
+                const isSpanish = questionAnalysis.detectedLanguage === 'spanish' || 
+                                 ['settear', 'configurar', 'instalar', 'como', 'que', 'quiero'].some(word => userMessage.toLowerCase().includes(word));
+                
+                questionAnalysis.needsUserInput = true;
+                questionAnalysis.reasoning = `Override: Observability/setup topic detected [${foundTerms.join(', ')}]`;
+                questionAnalysis.questions = [
+                    {
+                        question: isSpanish ? "¿Sobre qué es tu aplicación IA, qué es lo que hace?" : "What is your AI application about, what does it do?",
+                        category: "application_context",
+                        importance: "helpful",
+                        purpose: "To provide better setup guidance"
+                    },
+                    {
+                        question: isSpanish ? "¿En qué lenguaje de programación está construido?" : "What programming language is it built in?",
+                        category: "technical_stack",
+                        importance: "helpful",
+                        purpose: "To provide better setup guidance"
+                    },
+                    {
+                        question: isSpanish ? "¿Qué framework estás usando?" : "What framework are you using?",
+                        category: "technical_stack",
+                        importance: "helpful",
+                        purpose: "To provide better setup guidance"
+                    }
+                ];
+            }
             
             if (questionAnalysis.needsUserInput && questionAnalysis.questions.length > 0) {
                 console.log('\n❓ PREGUNTAS GENERADAS PARA EL USUARIO:');
