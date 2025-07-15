@@ -384,15 +384,13 @@ Return ONLY valid JSON.`;
      * @returns {Promise<Object>} OnBoarding response
      * 
      * FLOW EXPLANATION:
-     * 1. Extract context info from conversation history
-     * 2. If extractedInfo.questions === true (user has provided important info) → Call setupHandit for tailored setup
-     * 3. Else if phaseResult.isStarting === true (user starting from scratch) → Call questionContext to ask questions
-     * 4. Else (user not starting from scratch) → Provide general onboarding
+     * 1. Check if all questions have been asked step by step
+     * 2. If not all questions asked → Ask next question
+     * 3. If all questions asked → Extract context info and proceed with setup
      * 
      * RESULT STRUCTURE:
-     * - extractedInfo.questions = true → Setup instructions based on user's context
-     * - extractedInfo.questions = false + isStarting = true → Context questions to gather info
-     * - isStarting = false → General onboarding for experienced users
+     * - questionsCompleted = false → Ask next question step by step
+     * - questionsCompleted = true → Extract info and provide setup instructions
      */
     async onBoarding(userMessage, conversationHistory, intentionResult) {
         try {
@@ -401,14 +399,16 @@ Return ONLY valid JSON.`;
             // First, classify which phase the user is in
             const phaseResult = await this.phaseClassification(userMessage, conversationHistory, intentionResult);
             
-            // Extract context information from conversation history
-            const extractedInfo = await this.extractContextInfo(userMessage, conversationHistory);
+            // Check question status - step by step approach
+            const questionStatus = await this.checkQuestionStatus(userMessage, conversationHistory);
             
             // DECISION LOGIC EXPLANATION:
-            // If extractedInfo.questions === true: User has already provided important information
-            // (agent_name, agent_description, or language) so we can proceed with setup
-            if (extractedInfo.questions === true) {
-                console.log('📋 User has provided context info - proceeding with setup');
+            // If all questions have been asked step by step, extract info and proceed with setup
+            if (questionStatus.allQuestionsAsked === true) {
+                console.log('✅ All questions completed - extracting info and proceeding with setup');
+                
+                // NOW extract context information after all questions have been asked
+                const extractedInfo = await this.extractContextInfo(userMessage, conversationHistory);
                 const setupInfo = await this.setupHandit(userMessage, conversationHistory, extractedInfo);
                      
                 return {
@@ -420,14 +420,15 @@ Return ONLY valid JSON.`;
                     extractedInfo: extractedInfo,
                     setupInfo: setupInfo,
                     nextSteps: setupInfo.nextSteps || [],
-                    explanation: "User provided context information, proceeding with tailored setup instructions",
-                    on_boarding_observability_finished: true
+                    explanation: "All questions completed, proceeding with tailored setup instructions",
+                    on_boarding_observability_finished: true,
+                    questionStatus: questionStatus
                 };
             }
-            // If user is starting from scratch in Phase 1, ask context questions
+            // If user is starting from scratch in Phase 1, ask questions step by step
             else if (phaseResult.isStarting === true) {
-                console.log('❓ User starting from scratch - asking context questions');
-                const contextQuestions = await this.questionContext(userMessage, conversationHistory, extractedInfo);
+                console.log('❓ User starting from scratch - asking next question step by step');
+                const contextQuestions = await this.questionContext(userMessage, conversationHistory, questionStatus);
                 
                 return {
                     answer: contextQuestions.answer,
@@ -435,10 +436,11 @@ Return ONLY valid JSON.`;
                     phase: phaseResult.phase,
                     isStarting: phaseResult.isStarting,
                     phaseDetails: phaseResult,
-                    extractedInfo: extractedInfo,
+                    extractedInfo: null, // Don't extract until all questions are asked
                     contextQuestions: contextQuestions,
                     nextSteps: [],
-                    explanation: "User starting from scratch, gathering context information first"
+                    explanation: "User starting from scratch, asking questions step by step",
+                    questionStatus: questionStatus
                 };
             } else {
                 // For users not starting from scratch, provide different onboarding
@@ -449,7 +451,7 @@ Return ONLY valid JSON.`;
                     phase: phaseResult.phase,
                     isStarting: phaseResult.isStarting,
                     phaseDetails: phaseResult,
-                    extractedInfo: extractedInfo,
+                    extractedInfo: null,
                     nextSteps: [],
                     explanation: "User not starting from scratch, providing general onboarding guidance"
                 };
@@ -620,68 +622,65 @@ Return ONLY valid JSON.`;
     }
 
     /**
-     * Question Context LLM - Asks context questions for users starting from scratch
+     * Question Context LLM - Asks context questions step by step for users starting from scratch
      * @param {string} userMessage - Current user message
      * @param {Object} conversationHistory - Conversation history
-     * @param {Object} extractedInfo - Extracted context information from history
+     * @param {Object} questionStatus - Question status from checkQuestionStatus
      * @returns {Promise<Object>} Context questions response
      */
-    async questionContext(userMessage, conversationHistory, extractedInfo) {
+    async questionContext(userMessage, conversationHistory, questionStatus) {
         try {
-            console.log('❓ Question Context LLM: Analyzing context questions needed');
+            console.log('❓ Question Context LLM: Determining next question to ask step by step');
             
             // Prepare conversation history for context
             const conversationContext = conversationHistory.messages?.map(msg => `${msg.role}: ${msg.content}`).join('\n') || 'No previous conversation';
             
-            const questionPrompt = `You are a Question Context LLM. Your goal is to gather essential context information from users starting their Handit.ai journey.
+            const questionPrompt = `You are a Question Context LLM. Your goal is to ask the NEXT context question in the step-by-step onboarding process.
 
 CONVERSATION HISTORY:
 ${conversationContext}
 
 CURRENT USER MESSAGE: "${userMessage}"
 
-EXTRACTED CONTEXT INFO: ${JSON.stringify(extractedInfo)}
+QUESTION STATUS: ${JSON.stringify(questionStatus)}
 
-REQUIRED CONTEXT INFORMATION:
+REQUIRED CONTEXT INFORMATION (ask ONE by ONE):
 1. AppName - What is the name of their application/project?
 2. Agent Purpose - What does their AI agent do? (que hace el agente)
-3. Stack - What programming language is the user using?
+3. Stack - What programming language are you using?
 
 TASK:
 1. FIRST: Detect the user's language from their message and conversation history
-2. Go through the conversation history and current message thoroughly
-3. Check if ANY of the required information appears in the conversation:
-   - App/project name mentioned
-   - Agent functionality or purpose described
-   - Programming language or framework mentioned
-   - Check if the user ignored the questions
-4. Only ask if none of the questions appears in the history
-5. If the user ignored the questions, don't ask again
-6. Ask ALL 3 questions together in ONE response (not separately)
-7. Respond in the SAME LANGUAGE as the user
+2. Based on the QUESTION STATUS, determine which question to ask NEXT
+3. Ask ONLY the next question that hasn't been asked yet
+4. If a question was already asked but user didn't answer, SKIP to the next question
+5. Never repeat questions that were already asked
+6. Respond in the SAME LANGUAGE as the user
+
+STEP-BY-STEP LOGIC (use QUESTION STATUS to determine):
+- If appNameAsked = false → Ask for AppName
+- If appNameAsked = true AND agentPurposeAsked = false → Ask for AgentPurpose  
+- If appNameAsked = true AND agentPurposeAsked = true AND stackAsked = false → Ask for Stack
+- If all questions asked → Acknowledge completion
 
 RESPONSE RULES:
-- If ALL or SOME information is already available in the conversation → Don't ask questions, acknowledge the information
-- If user previously ignored questions → Don't ask again, proceed with onboarding
-- If NO information is available → Ask ALL 3 questions in ONE shot
+- Ask ONLY ONE question at a time
+- NEVER repeat questions that were already asked (check questionStatus)
+- If user skipped a previous question, don't ask it again
 - Keep questions natural and conversational
 - Respond in the user's detected language
 - Be friendly and welcoming
-- Ask all questions together, not one by one
 
-EXAMPLES of asking ALL questions together:
-- English: "Great! To help you get started with Handit.ai, I'd like to know: 1) What's the name of your application or project? 2) What does your AI agent do? 3) What programming language are you using?"
-- Spanish: "¡Perfecto! Para ayudarte a comenzar con Handit.ai, me gustaría saber: 1) ¿Cuál es el nombre de tu aplicación o proyecto? 2) ¿Qué hace tu agente de IA? 3) ¿Qué lenguaje de programación estás usando?"
+EXAMPLES of asking ONE question:
+- AppName: "Great! To help you get started with Handit.ai, what's the name of your application or project?"
+- AgentPurpose: "Perfect! Now, what does your AI agent do? What's its main purpose?"
+- Stack: "Excellent! What programming language are you using for your project?"
 
 RESPONSE FORMAT (JSON):
 {
-  "hasAppName": true/false,
-  "hasAgentPurpose": true/false,
-  "hasStack": true/false,
-  "questionsIgnored": true/false,
-  "shouldAskQuestions": true/false,
+  "questionToAsk": "appName" | "agentPurpose" | "stack" | "completed",
   "userLanguage": "detected language",
-  "answer": "All questions together or acknowledgment message in user's language"
+  "answer": "Single question in user's language or completion message"
 }
 
 Return ONLY valid JSON.`;
@@ -707,30 +706,22 @@ Return ONLY valid JSON.`;
                 // Validate result
                 if (!questionResult.answer) {
                     console.warn('⚠️ No answer provided, using default');
-                    questionResult.answer = "Welcome! To help you get started with Handit.ai, I'd like to know: 1) What's the name of your application or project? 2) What does your AI agent do? 3) What programming language are you using?";
+                    questionResult.answer = "Welcome! To help you get started with Handit.ai, what's the name of your application or project?";
+                    questionResult.questionToAsk = "appName";
                 }
                 
-                // Ensure boolean values
-                questionResult.hasAppName = Boolean(questionResult.hasAppName);
-                questionResult.hasAgentPurpose = Boolean(questionResult.hasAgentPurpose);
-                questionResult.hasStack = Boolean(questionResult.hasStack);
-                questionResult.questionsIgnored = Boolean(questionResult.questionsIgnored);
-                questionResult.shouldAskQuestions = Boolean(questionResult.shouldAskQuestions);
-                
-                // Add extracted context info to the result
-                questionResult.extractedInfo = extractedInfo;
+                // Validate questionToAsk
+                const validQuestions = ["appName", "agentPurpose", "stack", "completed"];
+                if (!validQuestions.includes(questionResult.questionToAsk)) {
+                    questionResult.questionToAsk = "appName";
+                }
                 
             } catch (error) {
                 console.warn('⚠️ Question Context JSON parse failed, using default:', error.message);
                 questionResult = {
-                    hasAppName: false,
-                    hasAgentPurpose: false,
-                    hasStack: false,
-                    questionsIgnored: false,
-                    shouldAskQuestions: true,
+                    questionToAsk: "appName",
                     userLanguage: "English",
-                    answer: "Welcome! To help you get started with Handit.ai, I'd like to know: 1) What's the name of your application or project? 2) What does your AI agent do? 3) What programming language are you using?",
-                    extractedInfo: extractedInfo
+                    answer: "Welcome! To help you get started with Handit.ai, what's the name of your application or project?"
                 };
             }
             
@@ -741,14 +732,136 @@ Return ONLY valid JSON.`;
         } catch (error) {
             console.warn('⚠️ Error in Question Context, using default response:', error.message);
             return {
-                hasAppName: false,
-                hasAgentPurpose: false,
-                hasStack: false,
-                questionsIgnored: false,
-                shouldAskQuestions: true,
+                questionToAsk: "appName",
                 userLanguage: "English",
-                answer: "Welcome! To help you get started with Handit.ai, I'd like to know: 1) What's the name of your application or project? 2) What does your AI agent do? 3) What programming language are you using?",
-                extractedInfo: null
+                answer: "Welcome! To help you get started with Handit.ai, what's the name of your application or project?"
+            };
+        }
+    }
+
+    /**
+     * Check Question Status LLM - Determines the status of each context question
+     * @param {string} userMessage - Current user message
+     * @param {Object} conversationHistory - Conversation history
+     * @returns {Promise<Object>} Question status result
+     */
+    async checkQuestionStatus(userMessage, conversationHistory) {
+        try {
+            console.log('🔄 Check Question Status LLM: Analyzing step-by-step question progress');
+            
+            // Prepare conversation history for context
+            const conversationContext = conversationHistory.messages?.map(msg => `${msg.role}: ${msg.content}`).join('\n') || 'No previous conversation';
+            
+            const statusPrompt = `You are a Check Question Status LLM. Your goal is to determine the status of each context question in the step-by-step onboarding process.
+
+CONVERSATION HISTORY:
+${conversationContext}
+
+CURRENT USER MESSAGE: "${userMessage}"
+
+REQUIRED CONTEXT QUESTIONS (step by step):
+1. AppName - What is the name of their application/project?
+2. Agent Purpose - What does their AI agent do?
+3. Stack - What programming language are you using?
+
+TASK: Analyze the conversation history to determine:
+1. Which questions have been ASKED by the assistant
+2. Which questions have been ANSWERED by the user
+3. If ALL 3 questions have been both asked OR answered
+
+ANALYSIS RULES:
+- appNameAsked: Has the assistant asked about app/project name?
+- appNameAnswered: Has the user provided their app/project name?
+- agentPurposeAsked: Has the assistant asked about what the AI agent does?
+- agentPurposeAnswered: Has the user explained what their AI agent does?
+- stackAsked: Has the assistant asked about programming language?
+- stackAnswered: Has the user mentioned their programming language/tech stack?
+- allQuestionsCompleted: Are ALL 3 questions both asked OR answered?
+
+RESPONSE FORMAT (JSON):
+{
+  "appNameAsked": true/false,
+  "appNameAnswered": true/false,
+  "agentPurposeAsked": true/false,
+  "agentPurposeAnswered": true/false,
+  "stackAsked": true/false,
+  "stackAnswered": true/false,
+  "allQuestionsCompleted": true/false,
+  "nextQuestionToAsk": "appName" | "agentPurpose" | "stack" | "none",
+  "reasoning": "Brief explanation of current status"
+}
+
+Return ONLY valid JSON.`;
+
+            const response = await aiService.generateResponse(statusPrompt, {
+                maxTokens: 250
+            });
+            
+            console.log('🔄 Check Question Status Response:', response.answer);
+            
+            let statusResult;
+            try {
+                let jsonText = response.answer.trim();
+                
+                // Extract JSON if wrapped in other text
+                const jsonMatch = jsonText.match(/\{[\s\S]*?\}/);
+                if (jsonMatch) {
+                    jsonText = jsonMatch[0];
+                }
+                
+                statusResult = JSON.parse(jsonText);
+                
+                // Validate result and ensure boolean values
+                statusResult.appNameAsked = Boolean(statusResult.appNameAsked);
+                statusResult.appNameAnswered = Boolean(statusResult.appNameAnswered);
+                statusResult.agentPurposeAsked = Boolean(statusResult.agentPurposeAsked);
+                statusResult.agentPurposeAnswered = Boolean(statusResult.agentPurposeAnswered);
+                statusResult.stackAsked = Boolean(statusResult.stackAsked);
+                statusResult.stackAnswered = Boolean(statusResult.stackAnswered);
+                statusResult.allQuestionsCompleted = Boolean(statusResult.allQuestionsCompleted);
+                
+                // For backward compatibility with onBoarding method
+                statusResult.allQuestionsAsked = statusResult.allQuestionsCompleted;
+                
+                // Validate nextQuestionToAsk
+                const validNextQuestions = ["appName", "agentPurpose", "stack", "none"];
+                if (!validNextQuestions.includes(statusResult.nextQuestionToAsk)) {
+                    statusResult.nextQuestionToAsk = "appName";
+                }
+                
+            } catch (error) {
+                console.warn('⚠️ Check Question Status JSON parse failed, using defaults:', error.message);
+                statusResult = { 
+                    appNameAsked: false,
+                    appNameAnswered: false,
+                    agentPurposeAsked: false,
+                    agentPurposeAnswered: false,
+                    stackAsked: false,
+                    stackAnswered: false,
+                    allQuestionsCompleted: false,
+                    allQuestionsAsked: false,
+                    nextQuestionToAsk: "appName",
+                    reasoning: "JSON parse failed, using defaults"
+                };
+            }
+            
+            console.log('🔄 Question Status:', statusResult);
+            
+            return statusResult;
+            
+        } catch (error) {
+            console.warn('⚠️ Error in Check Question Status, using defaults:', error.message);
+            return { 
+                appNameAsked: false,
+                appNameAnswered: false,
+                agentPurposeAsked: false,
+                agentPurposeAnswered: false,
+                stackAsked: false,
+                stackAnswered: false,
+                allQuestionsCompleted: false,
+                allQuestionsAsked: false,
+                nextQuestionToAsk: "appName",
+                reasoning: "Error occurred, using defaults"
             };
         }
     }
