@@ -57,6 +57,7 @@ async function handleLegacyConversation(req, res) {
             intention: response.intention,
             orientation: response.orientation,
             extractedInfo: response.extractedInfo,
+            on_boarding_observability_finished: response.on_boarding_observability_finished,
             confidence: response.confidence,
             sources: response.sources,
             totalSources: response.totalSources,

@@ -71,7 +71,8 @@ class AgenticAI {
                         orientation: orientResult,
                         onBoarding: onBoardingResponse,
                         extractedInfo: onBoardingResponse.extractedInfo,
-                        nodeType: "on_boarding_process"
+                        nodeType: "on_boarding_process",
+                        on_boarding_observability_finished: onBoardingResponse.on_boarding_observability_finished
                     };
                 } else {
                     // Handle general inquiries (non-onboarding)
@@ -419,7 +420,8 @@ Return ONLY valid JSON.`;
                     extractedInfo: extractedInfo,
                     setupInfo: setupInfo,
                     nextSteps: setupInfo.nextSteps || [],
-                    explanation: "User provided context information, proceeding with tailored setup instructions"
+                    explanation: "User provided context information, proceeding with tailored setup instructions",
+                    on_boarding_observability_finished: true
                 };
             }
             // If user is starting from scratch in Phase 1, ask context questions
