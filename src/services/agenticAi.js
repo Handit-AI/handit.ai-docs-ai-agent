@@ -54,13 +54,16 @@ class AgenticAI {
                     nodeType: "another_topic_redirect"
                 };
             } else {
-                // Continue with handit-related processing
+                // Continue with handit-related processing - call orientIntention
+                const orientResult = await this.orientIntention(userMessage, conversationHistory, intentionResult);
+                
                 return {
                     answer: "Processing your request...",
                     sessionId: sessionId,
                     userMessage: userMessage,
                     conversationHistory: conversationHistory,
                     intention: intentionResult,
+                    orientation: orientResult,
                     nodeType: "handit_processing"
                 };
             }
@@ -102,10 +105,12 @@ TASK: Analyze if the user's intention is about Handit or any topic based on the 
 
 DECISION RULES:
 
-1.- GO THROUGH THE DOCUMENTATION CONTEXT AND CHECK IF THE USER'S MESSAGE OR THE CONVERSATION HISTORY IS ABOUT Handit or any topic covered in the DOCUMENTATION CONTEXT.
-2.- If the user's message or the conversation history is about Handit or any topic covered in the DOCUMENTATION CONTEXT → Return handit: true
-3.- If the user's message is clearly about something NOT covered in the DOCUMENTATION CONTEXT → Return handit: false
-4.- Give a brief explanation of your decision in the explanation field.
+1.- translate the user's message and the conversation history to english.
+2.- GO THROUGH THE DOCUMENTATION CONTEXT AND CHECK IF THE USER'S MESSAGE OR THE CONVERSATION HISTORY IS ABOUT Handit or any topic covered in the DOCUMENTATION CONTEXT.
+3.- If the user's message or the conversation history is about Handit or any topic covered in the DOCUMENTATION CONTEXT → Return handit: true
+4.- If the user's message or the conversation history is about Handit but not mentioned directly, like <i want to install it>, or something about AI or Engineering → Return handit: true
+4.- If the user's message is clearly about something NOT covered in the DOCUMENTATION CONTEXT → Return handit: false
+5.- Give a brief explanation of your decision in the explanation field.
 
 Return ONLY valid JSON:
 {"handit": true, "explanation": "Brief explanation of your decision"} or {"handit": false, "explanation": "Brief explanation of your decision"}`;
@@ -222,6 +227,131 @@ Generate ONLY the response text (no JSON, no quotes).`;
             return {
                 answer: "I appreciate your question, but I'm specifically designed to help with Handit.ai - the open source engine that auto-improves your AI. I can help you with AI observability, quality evaluation, and self-improving AI systems. Would you like to know more about how Handit.ai can help optimize your AI applications?",
                 topic: 'another_topic'
+            };
+        }
+    }
+
+    /**
+     * Orient Intention LLM - Determines if user is in onboarding process or general inquiry
+     * @param {string} userMessage - Current user message
+     * @param {Object} conversationHistory - Conversation history
+     * @param {Object} intentionResult - Router intention result
+     * @returns {Promise<Object>} Orientation classification result
+     */
+    async orientIntention(userMessage, conversationHistory, intentionResult) {
+        try {
+            console.log('🧭 Orient Intention LLM: Classifying onboarding vs general inquiry');
+            
+            // Import handitKnowledgeBase from pinecone.js
+            const { handitKnowledgeBase } = require('../config/pinecone');
+            
+            // Use handitKnowledgeBase as context
+            const context = handitKnowledgeBase;
+            
+            // Prepare conversation history for context
+            const conversationContext = conversationHistory.messages?.map(msg => `${msg.role}: ${msg.content}`).join('\n') || 'No previous conversation';
+            
+            const orientPrompt = `You are an Orient Intention LLM. Your goal is to determine if the user is in an onboarding setup process or has a general inquiry about Handit.ai.
+
+HANDIT.AI CONTEXT:
+${context}
+
+CONVERSATION HISTORY:
+${conversationContext}
+
+CURRENT USER MESSAGE: "${userMessage}"
+
+ROUTER INTENTION RESULT: ${JSON.stringify(intentionResult)}
+
+ONBOARDING PROCESS DEFINITION:
+The onboarding process includes these 3 phases:
+
+Phase 1: AI Observability
+Set up comprehensive tracing to see inside your AI agents and understand what they're doing
+
+Phase 2: Quality Evaluation  
+Add automated evaluation to continuously assess performance across multiple quality dimensions
+
+Phase 3: Self-Improving AI
+Enable automatic optimization that generates better prompts, tests them, and provides proven improvements
+
+TASK: Analyze the last message and conversation history to determine:
+
+1. Go through the HANDIT.AI CONTEXT
+
+2. Is the user in or wants to start the ONBOARDING SETUP PROCESS? 
+   - Looking to setup/configure/install Handit.ai
+   - Asking about getting started with Handit.ai
+   - Asking about any of the 3 phases (AI Observability, Quality Evaluation, Self-Improving AI)
+   - Wanting to integrate Handit.ai into their system
+
+3. Is this a GENERAL INQUIRY about Handit.ai?
+   - Asking what Handit.ai is
+   - Asking about features without wanting to set up
+   - General questions about capabilities
+   - Information requests without setup intent
+
+CRITICAL RULES:
+- Can return both true (user wants onboarding AND has general questions)
+- CANNOT return both false (must be at least one true)
+- If in doubt, favor on_boarding: true
+
+RESPONSE FORMAT (JSON):
+{
+  "on_boarding": true/false,
+  "general": true/false,
+  "reasoning": "Brief explanation of classification"
+}
+
+Return ONLY valid JSON.`;
+
+            const response = await aiService.generateResponse(orientPrompt, {
+                maxTokens: 200
+            });
+            
+            console.log('🧭 Orient Intention Response:', response.answer);
+            
+            let orientResult;
+            try {
+                let jsonText = response.answer.trim();
+                
+                // Extract JSON if wrapped in other text
+                const jsonMatch = jsonText.match(/\{[\s\S]*?\}/);
+                if (jsonMatch) {
+                    jsonText = jsonMatch[0];
+                }
+                
+                orientResult = JSON.parse(jsonText);
+                
+                // Validate result - cannot be both false
+                if (!orientResult.on_boarding && !orientResult.general) {
+                    console.warn('⚠️ Both flags are false, defaulting to on_boarding: true');
+                    orientResult.on_boarding = true;
+                }
+                
+                // Ensure boolean values
+                orientResult.on_boarding = Boolean(orientResult.on_boarding);
+                orientResult.general = Boolean(orientResult.general);
+                
+            } catch (error) {
+                console.warn('⚠️ Orient Intention JSON parse failed, defaulting to on_boarding: true:', error.message);
+                orientResult = { 
+                    on_boarding: true, 
+                    general: false, 
+                    reasoning: "JSON parse failed, defaulting to onboarding" 
+                };
+            }
+            
+            console.log('🧭 Orientation Classification:', orientResult);
+            
+            return orientResult;
+            
+        } catch (error) {
+            console.warn('⚠️ Error in Orient Intention, defaulting to on_boarding: true:', error.message);
+            return { 
+                on_boarding: true, 
+                general: false, 
+                reasoning: "Error occurred, defaulting to onboarding" 
             };
         }
     }
