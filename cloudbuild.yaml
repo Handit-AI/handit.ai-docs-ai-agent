@@ -53,7 +53,6 @@ steps:
       - '--cpu=1'
       - '--set-env-vars=NODE_ENV=production'
       - '--set-env-vars=NODE_OPTIONS=--max-old-space-size=1536'
-      - '--set-env-vars=PORT=8080'
       - >-
         --image=$_AR_HOSTNAME/$PROJECT_ID/cloud-run-source-deploy/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
       - >-
