@@ -75,14 +75,17 @@ class AgenticAI {
                         on_boarding_observability_finished: onBoardingResponse.on_boarding_observability_finished
                     };
                 } else {
-                    // Handle general inquiries (non-onboarding)
+                    // Handle general inquiries (non-onboarding) - send to generalKnowledge LLM
+                    const generalResponse = await this.generalKnowledge(userMessage, conversationHistory);
+                    
                     return {
-                        answer: "Processing your general inquiry...",
+                        answer: generalResponse.answer,
                         sessionId: sessionId,
                         userMessage: userMessage,
                         conversationHistory: conversationHistory,
                         intention: intentionResult,
                         orientation: orientResult,
+                        generalKnowledge: generalResponse,
                         nodeType: "general_inquiry"
                     };
                 }
@@ -443,17 +446,20 @@ Return ONLY valid JSON.`;
                     questionStatus: questionStatus
                 };
             } else {
-                // For users not starting from scratch, provide different onboarding
-                console.log('🎯 User not starting from scratch - general onboarding');
+                // For users not starting from scratch, send to generalKnowledge LLM
+                console.log('🎯 User not starting from scratch - sending to generalKnowledge');
+                const generalResponse = await this.generalKnowledge(userMessage, conversationHistory);
+                
                 return {
-                    answer: `Welcome to Handit.ai onboarding! Based on your inquiry, you're interested in ${phaseResult.phase}. ${phaseResult.explanation}. and ${phaseResult.isStarting}`,
-                    type: 'onboarding_general',
+                    answer: generalResponse.answer,
+                    type: 'onboarding_general_knowledge',
                     phase: phaseResult.phase,
                     isStarting: phaseResult.isStarting,
                     phaseDetails: phaseResult,
                     extractedInfo: null,
+                    generalKnowledge: generalResponse,
                     nextSteps: [],
-                    explanation: "User not starting from scratch, providing general onboarding guidance"
+                    explanation: "User not starting from scratch, providing contextual response via generalKnowledge"
                 };
             }
             
@@ -1075,6 +1081,81 @@ Generate ONLY the response text (no JSON, no quotes).`;
             return {
                 answer: "Handit.ai is a powerful tool that helps you optimize your AI applications. You can integrate it with your existing codebase to collect data and improve your models. I can help you with AI Observability, Quality Evaluation, and Self-Improving AI systems. Would you like to know more about how Handit.ai can help optimize your AI applications?",
                 nextSteps: []
+            };
+        }
+    }
+
+    /**
+     * General Knowledge LLM - Handles general inquiries about Handit.ai topics
+     * @param {string} userMessage - Current user message
+     * @param {Object} conversationHistory - Conversation history
+     * @returns {Promise<Object>} General knowledge response
+     */
+    async generalKnowledge(userMessage, conversationHistory) {
+        try {
+            console.log('🧠 General Knowledge LLM: Processing general Handit.ai inquiry');
+            
+            // Import handitKnowledgeBase from pinecone.js
+            const { handitKnowledgeBase } = require('../config/pinecone');
+            
+            // Use handitKnowledgeBase as context
+            const context = handitKnowledgeBase;
+            
+            // Prepare conversation history for context
+            const conversationContext = conversationHistory.messages?.map(msg => `${msg.role}: ${msg.content}`).join('\n') || 'No previous conversation';
+            
+            const generalPrompt = `You are a General Knowledge LLM for Handit.ai. Your goal is to provide comprehensive and helpful answers about Handit.ai topics for users who have general inquiries.
+
+HANDIT.AI DOCUMENTATION CONTEXT:
+${context}
+
+CONVERSATION HISTORY:
+${conversationContext}
+
+{CURRENT_USER_MESSAGE}: "${userMessage}"
+
+TASK:
+1. FIRST: Detect the user's language from their message and conversation history
+2. GO THROUGH THE ENTIRE HANDIT.AI DOCUMENTATION CONTEXT THOROUGHLY
+3. Response the user las meesage {CURRENT_USER_MESSAGE} Provideing comprehensive, accurate information but all based on HANDIT.AI DOCUMENTATION CONTEXT
+4. Stay STRICTLY within Handit.ai topics - don't answer questions outside this scope
+5. Respond in the SAME LANGUAGE as the user
+6. Keep key terms like "AI Observability", "Quality Evaluation", "Self-Improving AI", "Handit.ai" in English, and all keywords about Handit.ai in English
+
+RESPONSE GUIDELINES:
+- Be comprehensive and informative
+- Provide specific examples when helpful
+- Include relevant technical details from documentation
+- Be friendly and professional
+- If the question is about getting started, mention both direct answers and onboarding option
+- Focus on being helpful while staying within Handit.ai scope
+- If is something not about code, then not be too verbose, just answer the question
+- Respond in the SAME LANGUAGE as the user 
+- If you using key terms like "AI Observability", "Quality Evaluation", "Self-Improving AI", "Handit.ai" in English, and all keywords about Handit.ai, then for this words keep it in English
+
+
+Generate ONLY the response text (no JSON, no quotes).`;
+
+            const response = await aiService.generateResponse(generalPrompt, {
+                maxTokens: 1500
+            });
+            
+            console.log('🧠 General Knowledge Response Generated');
+            
+            return {
+                answer: response.answer,
+                topic: 'general_handit_knowledge',
+                context_used: true
+            };
+            
+        } catch (error) {
+            console.warn('⚠️ Error in General Knowledge LLM, using default response:', error.message);
+            
+            // Default helpful response
+            return {
+                answer: "I'm here to help you with any questions about Handit.ai! I can provide information about our AI observability features, quality evaluation system, self-improving AI capabilities, and technical implementation details. What would you like to know about Handit.ai?",
+                topic: 'general_handit_knowledge',
+                context_used: false
             };
         }
     }
