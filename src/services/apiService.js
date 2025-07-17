@@ -9,7 +9,7 @@ const apiConfig = require('../config/apiActions.json');
 
 class ApiService {
     constructor() {
-        this.apiUrl = 'http://localhost:3001';
+        this.apiUrl = process.env[apiConfig.baseUrl.env];
         this.apiKey = process.env[apiConfig.authentication.tokenEnv];
         this.isEnabled = this.apiUrl && this.apiKey;
         this.config = apiConfig;
