@@ -19,9 +19,10 @@ class AgenticAI {
      * Process user input with conversation history
      * @param {string} userMessage - Latest user message
      * @param {string} sessionId - Session identifier
+     * @param {string} handitToken - Optional Handit.ai token for personalized examples
      * @returns {Promise<Object>} Simple response
      */
-    async processUserInput(userMessage, sessionId) {
+    async processUserInput(userMessage, sessionId, handitToken = null) {
         try {
             console.log(`💬 Current Question: ${userMessage}`);
 
@@ -60,7 +61,7 @@ class AgenticAI {
                 // Check if user needs onboarding
                 if (orientResult.on_boarding === true) {
                     // Redirect to onBoarding LLM
-                    const onBoardingResponse = await this.onBoarding(userMessage, conversationHistory, intentionResult);
+                    const onBoardingResponse = await this.onBoarding(userMessage, conversationHistory, intentionResult, handitToken);
                     
                     return {
                         answer: onBoardingResponse.answer,
@@ -384,6 +385,7 @@ Return ONLY valid JSON.`;
      * @param {string} userMessage - Current user message
      * @param {Object} conversationHistory - Conversation history
      * @param {Object} intentionResult - Router intention result
+     * @param {string} handitToken - Optional Handit.ai token for personalized examples
      * @returns {Promise<Object>} OnBoarding response
      * 
      * FLOW EXPLANATION:
@@ -395,7 +397,7 @@ Return ONLY valid JSON.`;
      * - questionsCompleted = false → Ask next question step by step
      * - questionsCompleted = true → Extract info and provide setup instructions
      */
-    async onBoarding(userMessage, conversationHistory, intentionResult) {
+    async onBoarding(userMessage, conversationHistory, intentionResult, handitToken = null) {
         try {
             console.log('🚀 OnBoarding LLM: Processing user onboarding request');
             
@@ -412,7 +414,7 @@ Return ONLY valid JSON.`;
                 
                 // NOW extract context information after all questions have been asked
                 const extractedInfo = await this.extractContextInfo(userMessage, conversationHistory);
-                const setupInfo = await this.setupHandit(userMessage, conversationHistory, extractedInfo);
+                const setupInfo = await this.setupHandit(userMessage, conversationHistory, extractedInfo, handitToken);
                      
                 return {
                     answer: setupInfo.answer,
@@ -652,8 +654,8 @@ QUESTION STATUS: ${JSON.stringify(questionStatus)}
 
 REQUIRED CONTEXT INFORMATION (ask ONE by ONE):
 1. AppName - What is the name of their application/project?
-2. Agent Purpose - What does their AI agent do? (que hace el agente)
-3. Stack - What programming language are you using?
+2. agentProjectType - What type of AI project are you building? 1. Document Processing, 2. Customer Service Agent, 3. Chatbot, 4. Other
+3. Stack - What technologies are you using to build your app? JavaScript / Python / LangChain / LangGraph/ n8n / etc.
 
 TASK:
 1. FIRST: Detect the user's language from their message and conversation history
@@ -665,8 +667,8 @@ TASK:
 
 STEP-BY-STEP LOGIC (use QUESTION STATUS to determine):
 - If appNameAsked = false → Ask for AppName
-- If appNameAsked = true AND agentPurposeAsked = false → Ask for AgentPurpose  
-- If appNameAsked = true AND agentPurposeAsked = true AND stackAsked = false → Ask for Stack
+- If appNameAsked = true AND agentProjectTypeAsked = false → Ask for AgentProjectType  
+- If appNameAsked = true AND agentProjectTypeAsked = true AND stackAsked = false → Ask for Stack
 - If all questions asked → Acknowledge completion
 
 RESPONSE RULES:
@@ -679,12 +681,12 @@ RESPONSE RULES:
 
 EXAMPLES of asking ONE question:
 - AppName: "Great! To help you get started with Handit.ai, what's the name of your application or project?"
-- AgentPurpose: "Perfect! Now, what does your AI agent do? What's its main purpose?"
-- Stack: "Excellent! What programming language are you using for your project?"
+- AgentProjectType: "Perfect! What type of AI project are you building?  1. Document Processing, 2. Customer Service Agent, 3. Chatbot, 4. Other"
+- Stack: "Excellent! What technologies are you using to build your app? (JavaScript, Python, LangChain, LangGraph, n8n, etc.)"
 
 RESPONSE FORMAT (JSON):
 {
-  "questionToAsk": "appName" | "agentPurpose" | "stack" | "completed",
+  "questionToAsk": "appName" | "agentProjectType" | "stack" | "completed",
   "userLanguage": "detected language",
   "answer": "Single question in user's language or completion message"
 }
@@ -717,7 +719,7 @@ Return ONLY valid JSON.`;
                 }
                 
                 // Validate questionToAsk
-                const validQuestions = ["appName", "agentPurpose", "stack", "completed"];
+                const validQuestions = ["appName", "agentProjectType", "stack", "completed"];
                 if (!validQuestions.includes(questionResult.questionToAsk)) {
                     questionResult.questionToAsk = "appName";
                 }
@@ -767,8 +769,8 @@ CURRENT USER MESSAGE: "${userMessage}"
 
 REQUIRED CONTEXT QUESTIONS (step by step):
 1. AppName - What is the name of their application/project?
-2. Agent Purpose - What does their AI agent do?
-3. Stack - What programming language are you using?
+2. agentProjectType - What type of AI project are you building? 1. Document Processing, 2. Customer Service Agent, 3. Chatbot, 4. Other
+3. Stack - What technologies are you using to build your app? JavaScript / Python / LangChain / LangGraph/ n8n / etc.
 
 TASK: Analyze the conversation history to determine:
 1. Which questions have been ASKED by the assistant
@@ -793,7 +795,7 @@ RESPONSE FORMAT (JSON):
   "stackAsked": true/false,
   "stackAnswered": true/false,
   "allQuestionsCompleted": true/false,
-  "nextQuestionToAsk": "appName" | "agentPurpose" | "stack" | "none",
+  "nextQuestionToAsk": "appName" | "agentProjectType" | "stack" | "none",
   "reasoning": "Brief explanation of current status"
 }
 
@@ -894,36 +896,32 @@ CURRENT USER MESSAGE: "${userMessage}"
 
 IMPORTANT INFORMATION TO DETECT:
 1. What's the name of your application or project? (agent_name)
-2. What does your AI agent do? (agent_description)
-3. What programming language are you using? (language)
+2. What type of AI project are you building? (agentProjectType) - Document Processing, Customer Service Agent, Chatbot, Other
+3. What technologies are you using to build your app? (stack) - JavaScript, Python, LangChain, LangGraph, n8n, etc.
 
 TASK:
 1. Go through the ENTIRE conversation history thoroughly and the current user message
-2. Look for answers to the 3 important questions anywhere in the conversation and similar questions
-3. Extract any information that answers these questions, even if asked differently
+2. Look for answers to the 3 important questions (IMPORTANT INFORMATION TO DETECT) anywhere in the conversation and similar questions
+3. Extract any information that answers these questions (IMPORTANT INFORMATION TO DETECT), even if asked differently
 4. Detect if the user was asked these questions but ignored/avoided answering at least one
 5. If you find partial information, extract what you can
 
 DETECTION RULES:
-- App/Project Name: Look for mentions of app names, project names, company names, product names
-- Agent Description: Look for explanations of what their AI does, agent functionality, use cases, purposes
-- Programming Language: Look for mentions of languages (Python, JavaScript, Java, etc.), frameworks, tech stack
+- App/Project Name: Look for mentions of app names, project names, company names, product names, etc
+- Agent Project Type: Look for mentions of Document Processing, Customer Service Agent, Chatbot, or other project types
+- Stack/Technologies: Look for mentions of technologies (JavaScript, Python, LangChain, LangGraph, n8n, etc.), frameworks, programming languages, etc
 - Questions Ignored: If questions were asked but user changed topic, didn't answer, or avoided responding
 
-EXAMPLES of what to extract:
-- "My app is called ChatBot Pro" → agent_name: "ChatBot Pro"
-- "I'm building a customer service agent" → agent_description: "customer service agent"
-- "We use Python for our backend" → language: "Python"
-- "I'm working on an AI that helps with code reviews" → agent_description: "AI that helps with code reviews"
 
 RESPONSE FORMAT (JSON):
 {
   "agent_name": "extracted name or null",
-  "agent_description": "extracted description or null", 
-  "language": "extracted language or null",
+  "agentProjectType": "extracted project type or null", 
+  "stack": "extracted technologies or null",
   "questions": true/false,
   "extraction_confidence": "high" | "medium" | "low",
-  "missing_info": ["agent_name", "agent_description", "language"] // array of missing information
+  "missing_info": ["agent_name", "agentProjectType", "stack"], // array of missing information
+  "explanation": "Brief explanation of the extraction process"
 }
 
 RULES:
@@ -966,19 +964,19 @@ Return ONLY valid JSON.`;
                 if (!Array.isArray(extractResult.missing_info)) {
                     extractResult.missing_info = [];
                     if (!extractResult.agent_name) extractResult.missing_info.push('agent_name');
-                    if (!extractResult.agent_description) extractResult.missing_info.push('agent_description');
-                    if (!extractResult.language) extractResult.missing_info.push('language');
+                    if (!extractResult.agentProjectType) extractResult.missing_info.push('agentProjectType');
+                    if (!extractResult.stack) extractResult.missing_info.push('stack');
                 }
                 
             } catch (error) {
                 console.warn('⚠️ Extract Context Info JSON parse failed, using default:', error.message);
                 extractResult = {
                     agent_name: null,
-                    agent_description: null,
-                    language: null,
+                    agentProjectType: null,
+                    stack: null,
                     questions: false,
                     extraction_confidence: "low",
-                    missing_info: ["agent_name", "agent_description", "language"]
+                    missing_info: ["agent_name", "agentProjectType", "stack"]
                 };
             }
             
@@ -990,11 +988,11 @@ Return ONLY valid JSON.`;
             console.warn('⚠️ Error in Extract Context Info, using default response:', error.message);
             return {
                 agent_name: null,
-                agent_description: null,
-                language: null,
+                agentProjectType: null,
+                stack: null,
                 questions: false,
                 extraction_confidence: "low",
-                missing_info: ["agent_name", "agent_description", "language"]
+                missing_info: ["agent_name", "agentProjectType", "stack"]
             };
         }
     }
@@ -1004,9 +1002,10 @@ Return ONLY valid JSON.`;
      * @param {string} userMessage - Current user message
      * @param {Object} conversationHistory - Conversation history
      * @param {Object} extractedInfo - Extracted context information
+     * @param {string} handitToken - Optional Handit.ai token for personalized examples
      * @returns {Promise<Object>} Setup information response
      */
-    async setupHandit(userMessage, conversationHistory, extractedInfo) {
+    async setupHandit(userMessage, conversationHistory, extractedInfo, handitToken = null) {
         try {
             console.log('🛠️ Setup Handit LLM: Providing tailored setup information');
             
@@ -1030,24 +1029,28 @@ ${conversationContext}
 CURRENT USER MESSAGE: "${userMessage}"
 
 EXTRACTED CONTEXT INFO: ${JSON.stringify(extractedInfo)}
+${handitToken ? `
+USER'S HANDIT TOKEN: ${handitToken}
+IMPORTANT: Use this EXACT token in ALL code examples where HANDIT_API_KEY is needed. Replace "your-api-key" or "handit_12345_abcde" with "${handitToken}" in all examples.` : ''}
 
 TASK:
 1. GO THROUGH THE ENTIRE DOCUMENTATION CONTEXT THOROUGHLY
-2. Based on the extracted information (agent_name, agent_description, language), provide COMPLETE personalized setup instructions for AI Observability
-3. If there's a programming language in the extracted info (JS/JavaScript or Python), ONLY provide information related to that specific language
+2. Based on the extracted information (agent_name, agentProjectType, stack), provide COMPLETE personalized setup instructions for AI Observability
+3. If there's a technology stack in the extracted info (JS/JavaScript, Python, LangChain, etc.), ONLY provide information related to those specific technologies
 4. Use the agent_name if available to personalize the setup instructions
 5. Focus on Phase 1: AI Observability - setting up comprehensive tracing to see inside AI agents
-6. Provide THE WHOLE setup instructions tailored to their specific context
+6. Provide THE WHOLE setup instructions tailored to their specific context and project type
 7. Detect user's language and respond in the same language
+${handitToken ? `8. CRITICAL: Use the provided token "${handitToken}" in ALL code examples instead of placeholder tokens` : ''}
 
 RESPONSE STRUCTURE:
 - Personalized greeting using their agent_name if available
 - Language-specific installation instructions
-- Configuration steps tailored to their use case
+- Configuration steps tailored to their use case with REAL working examples using their token
 - Next steps for AI Observability setup
 - Keep technical terms like "AI Observability", "Quality Evaluation", "Self-Improving AI", "Handit.ai" in English
 
-
+IF THE ${handitToken} IS NOT NULL, THEN NOT MENTION THE STEP WHERE THE USER NEEDS TO GET THE TOKEN FROM THE DASHBOARD
 
 Generate ONLY the response text (no JSON, no quotes).`;
 
@@ -1059,19 +1062,23 @@ Generate ONLY the response text (no JSON, no quotes).`;
             
             // Generate next steps based on extracted info
             const nextSteps = [];
-            if (extractedInfo.language) {
-                nextSteps.push(`Install Handit.ai for ${extractedInfo.language}`);
+            if (extractedInfo.stack) {
+                nextSteps.push(`Install Handit.ai for ${extractedInfo.stack}`);
                 nextSteps.push('Configure your project settings');
             }
             if (extractedInfo.agent_name) {
                 nextSteps.push(`Set up tracing for ${extractedInfo.agent_name}`);
             }
+            if (extractedInfo.agentProjectType) {
+                nextSteps.push(`Configure ${extractedInfo.agentProjectType} specific settings`);
+            }
             nextSteps.push('Test your AI Observability setup');
             
             return {
                 answer: response.answer,
-                language: extractedInfo.language || null,
+                stack: extractedInfo.stack || null,
                 agentName: extractedInfo.agent_name || null,
+                agentProjectType: extractedInfo.agentProjectType || null,
                 nextSteps: nextSteps
             };
             

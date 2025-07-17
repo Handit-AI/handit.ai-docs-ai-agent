@@ -22,7 +22,7 @@ async function handleLegacyConversation(req, res) {
     const startTime = Date.now();
     
     try {
-        const { question, sessionId: providedSessionId } = req.body;
+        const { question, sessionId: providedSessionId, handitToken } = req.body;
         
         // Validate input
         if (!question || typeof question !== 'string' || question.trim().length === 0) {
@@ -37,9 +37,12 @@ async function handleLegacyConversation(req, res) {
         
         console.log(`🤖 Processing question for session: ${sessionId}`);
         console.log(`📝 Question: "${question.substring(0, 100)}${question.length > 100 ? '...' : ''}"`);
+        if (handitToken) {
+            console.log(`🔑 Handit token provided for personalized examples`);
+        }
         
         // Process with guided agentic system
-        const response = await agenticAI.processUserInput(question, sessionId);
+        const response = await agenticAI.processUserInput(question, sessionId, handitToken);
         
         // Create or get conversation and save messages
         const conversation = await conversationService.createOrGetConversation(sessionId);
@@ -63,6 +66,7 @@ async function handleLegacyConversation(req, res) {
             totalSources: response.totalSources,
             requiresUserInput: response.requiresUserInput || false,
             nextAction: response.nextAction || 'continue',
+            handitTokenUsed: !!handitToken,
             metadata: {
                 processingTimeMs: processingTime,
                 timestamp: new Date().toISOString(),
