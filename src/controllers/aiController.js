@@ -7,11 +7,13 @@ const { aiService } = require('../services/aiService');
 // const AgenticSystem = require('../services/agenticSystem');
 const ConversationService = require('../services/conversationService');
 const AgenticAI = require('../services/agenticAi');
+const ApiService = require('../services/apiService');
 
 // Initialize services
 // const agenticSystem = new AgenticSystem();
 const agenticAI = new AgenticAI();
 const conversationService = new ConversationService();
+const apiService = new ApiService();
 
 /**
  * Handle AI conversation (main endpoint)
@@ -23,6 +25,14 @@ async function handleLegacyConversation(req, res) {
     
     try {
         const { question, sessionId: providedSessionId } = req.body;
+        
+        // Extract Authorization Bearer token from headers (for API calls, not endpoint auth)
+        const authHeader = req.headers.authorization;
+        let userApiToken = null;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            userApiToken = authHeader.substring(7); // Remove 'Bearer ' prefix
+            console.log('🔑 User provided API token for external API calls');
+        }
         
         // Validate input
         if (!question || typeof question !== 'string' || question.trim().length === 0) {
@@ -38,8 +48,8 @@ async function handleLegacyConversation(req, res) {
         console.log(`🤖 Processing question for session: ${sessionId}`);
         console.log(`📝 Question: "${question.substring(0, 100)}${question.length > 100 ? '...' : ''}"`);
         
-        // Process with guided agentic system
-        const response = await agenticAI.processUserInput(question, sessionId);
+        // Process with guided agentic system, passing the user's API token
+        const response = await agenticAI.processUserInput(question, sessionId, userApiToken);
         
         // Create or get conversation and save messages
         const conversation = await conversationService.createOrGetConversation(sessionId);
@@ -177,6 +187,7 @@ async function clearConversation(req, res) {
 async function getHealthStatus(req, res) {
     try {
         const health = await aiService.healthCheck();
+        const apiHealth = await apiService.healthCheck();
         
         res.json({
             status: 'healthy',
@@ -184,7 +195,12 @@ async function getHealthStatus(req, res) {
             services: {
                 aiService: health.status,
                 openai: health.openai ? 'connected' : 'disconnected',
-                pinecone: health.pinecone ? 'connected' : 'disconnected'
+                pinecone: health.pinecone ? 'connected' : 'disconnected',
+                externalApi: {
+                    status: apiHealth.healthy ? 'connected' : 'disconnected',
+                    message: apiHealth.message,
+                    isOptional: apiHealth.isOptional || false
+                }
             }
         });
 
@@ -264,11 +280,44 @@ async function handleDirectTest(req, res) {
     }
 }
 
+/**
+ * Test API integration
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+async function testApiIntegration(req, res) {
+    try {
+        console.log('🧪 Testing API integration...');
+        
+        // Test API availability
+        const apiHealth = await apiService.healthCheck();
+        const availableActions = apiService.getAvailableActions();
+        
+        res.json({
+            apiAvailable: apiService.isAvailable(),
+            health: apiHealth,
+            availableActions: availableActions,
+            actionsDescription: apiService.getActionsDescription(),
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('❌ API integration test error:', error);
+        
+        res.status(500).json({
+            error: 'API integration test failed',
+            message: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+}
+
 module.exports = {
     handleLegacyConversation,
     getConversationHistory,
     clearConversation,
     getHealthStatus,
     getPerformanceMetrics,
-    handleDirectTest
+    handleDirectTest,
+    testApiIntegration
 };

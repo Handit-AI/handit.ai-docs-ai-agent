@@ -62,8 +62,11 @@ gcloud secrets create PINECONE_ENVIRONMENT --data-file=- <<< "your_pinecone_envi
 gcloud secrets create PINECONE_INDEX_NAME --data-file=- <<< "handit-ai-docs"
 gcloud secrets create PINECONE_NAMESPACE --data-file=- <<< "default"
 
-# Handit.ai secrets
-gcloud secrets create HANDIT_API_KEY --data-file=- <<< "your_handit_api_key"
+# API Integration secrets
+# Required: API URL for external service integration
+gcloud secrets create API_URL --data-file=- <<< "https://api.example.com"
+# Optional: Default API key (users can provide their own via Authorization header)
+gcloud secrets create API_KEY --data-file=- <<< "your_default_api_key"
 ```
 
 ### 4. Create Cloud Build Trigger
@@ -96,6 +99,19 @@ gcloud builds submit --config=cloudbuild.yaml .
 The following environment variables are automatically set by Cloud Run:
 - `PORT`: Set to 8080 (Cloud Run default)
 - `NODE_ENV`: Set to "production" in the Cloud Build config
+
+### Optional Features
+
+The AI agent includes flexible integration with external APIs:
+- `API_URL`: URL to the external API backend (required for API features)
+- `API_KEY`: Default API key for authentication (optional - users can provide their own)
+
+**Token Flexibility**: Users can provide their own API tokens via the Authorization header in requests. The system supports:
+1. **User tokens** (Authorization header) - Takes precedence
+2. **Default token** (API_KEY environment variable) - Fallback
+3. **No API integration** - Falls back to documentation mode
+
+**Note**: The agent works perfectly without external API integration. When not configured, it provides documentation and guidance. When configured, it can execute actions like creating integration tokens, managing evaluators, etc.
 
 ### Secrets
 

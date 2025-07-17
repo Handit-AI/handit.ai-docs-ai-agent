@@ -6,6 +6,8 @@
 
 const { aiService } = require('./aiService');
 const ConversationService = require('./conversationService');
+const ApiService = require('./apiService');
+const EvaluatorConnectionService = require('./evaluatorConnectionService');
 
 
 class AgenticAI {
@@ -13,17 +15,23 @@ class AgenticAI {
 
     constructor() {
         this.conversationService = new ConversationService();
+        this.apiService = new ApiService();
+        this.evaluatorConnectionService = new EvaluatorConnectionService(this.apiService);
     }
 
     /**
      * Process user input with conversation history
      * @param {string} userMessage - Latest user message
      * @param {string} sessionId - Session identifier
+     * @param {string} userApiToken - Optional API token from user for external API calls
      * @returns {Promise<Object>} Simple response
      */
-    async processUserInput(userMessage, sessionId) {
+    async processUserInput(userMessage, sessionId, userApiToken = null) {
         try {
             console.log(`💬 Current Question: ${userMessage}`);
+            
+            // Store current session ID for access by other methods
+            this.currentSessionId = sessionId;
 
             // Get conversation history
             const conversationHistory = await this.conversationService.getConversationHistory(sessionId, 20);
@@ -58,37 +66,37 @@ class AgenticAI {
                 const orientResult = await this.orientIntention(userMessage, conversationHistory, intentionResult);
                 
                 // Check if user needs onboarding
-                if (orientResult.on_boarding === true) {
-                    // Redirect to onBoarding LLM
-                    const onBoardingResponse = await this.onBoarding(userMessage, conversationHistory, intentionResult);
-                    
-                    return {
-                        answer: onBoardingResponse.answer,
-                        sessionId: sessionId,
-                        userMessage: userMessage,
-                        conversationHistory: conversationHistory,
-                        intention: intentionResult,
-                        orientation: orientResult,
-                        onBoarding: onBoardingResponse,
-                        extractedInfo: onBoardingResponse.extractedInfo,
-                        nodeType: "on_boarding_process",
-                        on_boarding_observability_finished: onBoardingResponse.on_boarding_observability_finished
-                    };
-                } else {
-                    // Handle general inquiries (non-onboarding) - send to generalKnowledge LLM
-                    const generalResponse = await this.generalKnowledge(userMessage, conversationHistory);
-                    
-                    return {
-                        answer: generalResponse.answer,
-                        sessionId: sessionId,
-                        userMessage: userMessage,
-                        conversationHistory: conversationHistory,
-                        intention: intentionResult,
-                        orientation: orientResult,
-                        generalKnowledge: generalResponse,
-                        nodeType: "general_inquiry"
-                    };
-                }
+                            if (orientResult.on_boarding === true) {
+                // Redirect to onBoarding LLM
+                const onBoardingResponse = await this.onBoarding(userMessage, conversationHistory, intentionResult, userApiToken);
+                
+                return {
+                    answer: onBoardingResponse.answer,
+                    sessionId: sessionId,
+                    userMessage: userMessage,
+                    conversationHistory: conversationHistory,
+                    intention: intentionResult,
+                    orientation: orientResult,
+                    onBoarding: onBoardingResponse,
+                    extractedInfo: onBoardingResponse.extractedInfo,
+                    nodeType: "on_boarding_process",
+                    on_boarding_observability_finished: onBoardingResponse.on_boarding_observability_finished
+                };
+            } else {
+                // Handle general inquiries (non-onboarding) - send to generalKnowledge LLM
+                const generalResponse = await this.generalKnowledge(userMessage, conversationHistory, userApiToken);
+                
+                return {
+                    answer: generalResponse.answer,
+                    sessionId: sessionId,
+                    userMessage: userMessage,
+                    conversationHistory: conversationHistory,
+                    intention: intentionResult,
+                    orientation: orientResult,
+                    generalKnowledge: generalResponse,
+                    nodeType: "general_inquiry"
+                };
+            }
             }
 
         } catch (error) {
@@ -395,7 +403,7 @@ Return ONLY valid JSON.`;
      * - questionsCompleted = false → Ask next question step by step
      * - questionsCompleted = true → Extract info and provide setup instructions
      */
-    async onBoarding(userMessage, conversationHistory, intentionResult) {
+    async onBoarding(userMessage, conversationHistory, intentionResult, userApiToken) {
         try {
             console.log('🚀 OnBoarding LLM: Processing user onboarding request');
             
@@ -448,7 +456,7 @@ Return ONLY valid JSON.`;
             } else {
                 // For users not starting from scratch, send to generalKnowledge LLM
                 console.log('🎯 User not starting from scratch - sending to generalKnowledge');
-                const generalResponse = await this.generalKnowledge(userMessage, conversationHistory);
+                const generalResponse = await this.generalKnowledge(userMessage, conversationHistory, userApiToken);
                 
                 return {
                     answer: generalResponse.answer,
@@ -1091,9 +1099,52 @@ Generate ONLY the response text (no JSON, no quotes).`;
      * @param {Object} conversationHistory - Conversation history
      * @returns {Promise<Object>} General knowledge response
      */
-    async generalKnowledge(userMessage, conversationHistory) {
+    async generalKnowledge(userMessage, conversationHistory, userApiToken = null) {
         try {
             console.log('🧠 General Knowledge LLM: Processing general Handit.ai inquiry');
+            
+            // Get session ID from the current processing context
+            const sessionId = this.currentSessionId || 'default_session';
+            
+            // FIRST: Check if there's an active evaluator connection flow
+            if (this.evaluatorConnectionService.hasActiveFlow(sessionId)) {
+                console.log('🔄 Continuing existing evaluator connection flow');
+                return await this.evaluatorConnectionService.continueFlow(sessionId, userMessage);
+            }
+            
+            // SECOND: Check if user is requesting NEW evaluator connection
+            const evaluatorRequest = await this.evaluatorConnectionService.detectEvaluatorConnectionRequest(userMessage, conversationHistory);
+            
+            if (evaluatorRequest.isEvaluatorRequest && evaluatorRequest.confidence > 0.7) {
+                console.log('🔗 New evaluator connection request detected');
+                
+                if (!userApiToken) {
+                    return {
+                        answer: "To connect evaluators to your models, I need your API token. Please include your API token in the Authorization header of your request.",
+                        success: false,
+                        requiresApiToken: true
+                    };
+                }
+                
+                return await this.evaluatorConnectionService.startEvaluatorConnectionFlow(sessionId, userApiToken);
+            }
+            
+            // First, check if this request requires API action
+            const apiEvaluation = await this.evaluateApiAction(userMessage, conversationHistory, userApiToken);
+            
+            // If API action is needed, execute it
+            if (apiEvaluation.shouldExecute) {
+                console.log('🔧 API action required, executing...');
+                return await this.executeApiAction(
+                    apiEvaluation.actionName,
+                    apiEvaluation.parameters || {},
+                    userMessage,
+                    conversationHistory,
+                    userApiToken
+                );
+            }
+            
+            console.log('📚 No API action needed, providing documentation response');
             
             // Import handitKnowledgeBase from pinecone.js
             const { handitKnowledgeBase } = require('../config/pinecone');
@@ -1156,6 +1207,201 @@ Generate ONLY the response text (no JSON, no quotes).`;
                 answer: "I'm here to help you with any questions about Handit.ai! I can provide information about our AI observability features, quality evaluation system, self-improving AI capabilities, and technical implementation details. What would you like to know about Handit.ai?",
                 topic: 'general_handit_knowledge',
                 context_used: false
+            };
+        }
+    }
+
+    /**
+     * Evaluate if an API action should be executed based on user intent
+     * @param {string} userMessage - Current user message
+     * @param {Object} conversationHistory - Conversation history
+     * @param {string} userApiToken - Optional API token from user
+     * @returns {Promise<Object>} API action evaluation result
+     */
+    async evaluateApiAction(userMessage, conversationHistory, userApiToken = null) {
+        try {
+            console.log('🔍 Evaluating if API action is needed...');
+            
+            // If API is not available and no user token provided, return immediately
+            if (!this.apiService.isAvailable() && !userApiToken) {
+                return {
+                    shouldExecute: false,
+                    reason: 'API not configured and no user token provided',
+                    isOptional: true
+                };
+            }
+
+            // Prepare conversation context
+            const conversationContext = conversationHistory.messages?.map(msg => `${msg.role}: ${msg.content}`).join('\n') || 'No previous conversation';
+            
+            // Get available actions description
+            const availableActions = this.apiService.getActionsDescription();
+            
+            const evaluationPrompt = `You are an API Action Evaluator. Your job is to determine if the user's request requires executing an action via the external API.
+
+CONVERSATION HISTORY:
+${conversationContext}
+
+CURRENT USER MESSAGE: "${userMessage}"
+
+AVAILABLE API ACTIONS:
+${availableActions}
+
+EVALUATION RULES:
+1. The user must be explicitly asking for something that requires API interaction
+2. Examples of API-worthy requests:
+   - "create an integration token"
+   - "show me evaluators"
+   - "get my integration tokens"
+   - "revoke a token"
+   - "list my models"
+   - "get providers"
+
+3. Examples of NON-API requests (answer with documentation):
+   - "how do I use the system?"
+   - "what are integration tokens?"
+   - "how to install the SDK?"
+   - "explain the features"
+   - "help me with setup"
+   - "connect evaluators" (handled by specialized flow)
+   - "associate evaluators" (handled by specialized flow)
+
+4. If the user is asking for general information, configuration help, or documentation → shouldExecute: false
+5. If the user is asking to perform a specific action that requires API calls → shouldExecute: true
+6. If the user is asking to connect/associate evaluators → this is handled by the specialized evaluator connection flow
+
+TASK: Analyze the user's message and determine if it requires API action.
+
+RESPONSE FORMAT (JSON):
+{
+  "shouldExecute": true/false,
+  "actionName": "action_name_if_needed",
+  "parameters": {"key": "value"},
+  "reasoning": "Brief explanation of decision",
+  "confidence": 0.8
+}
+
+Return ONLY valid JSON.`;
+
+            const response = await aiService.generateResponse(evaluationPrompt, {
+                maxTokens: 300
+            });
+
+            console.log('🔍 API Action Evaluation Response:', response.answer);
+
+            let evaluationResult;
+            try {
+                let jsonText = response.answer.trim();
+                const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    jsonText = jsonMatch[0];
+                }
+                evaluationResult = JSON.parse(jsonText);
+            } catch (error) {
+                console.warn('API evaluation JSON parse failed, defaulting to no action:', error.message);
+                evaluationResult = {
+                    shouldExecute: false,
+                    reasoning: "Parse error - defaulting to documentation response",
+                    confidence: 0.5
+                };
+            }
+
+            return evaluationResult;
+
+        } catch (error) {
+            console.error('❌ Error in API action evaluation:', error);
+            return {
+                shouldExecute: false,
+                reasoning: "Error in evaluation - defaulting to documentation response",
+                confidence: 0.3
+            };
+        }
+    }
+
+    /**
+     * Execute an API action and format the response
+     * @param {string} actionName - Name of the action to execute
+     * @param {Object} parameters - Parameters for the action
+     * @param {string} userMessage - Original user message
+     * @param {Object} conversationHistory - Conversation history
+     * @param {string} userApiToken - Optional API token from user
+     * @returns {Promise<Object>} Formatted API response
+     */
+    async executeApiAction(actionName, parameters, userMessage, conversationHistory, userApiToken = null) {
+        try {
+            console.log(`🚀 Executing API action: ${actionName}`);
+            
+            // Execute the API action with user's token if provided
+            const apiResult = await this.apiService.executeAction(actionName, parameters, userApiToken);
+            
+            // If API action failed, provide a helpful response
+            if (!apiResult.success) {
+                console.log('❌ API action failed:', apiResult.error);
+                
+                // For optional API failures, provide documentation instead
+                if (apiResult.isOptional) {
+                    const fallbackResponse = await this.generalKnowledge(userMessage, conversationHistory, userApiToken);
+                    return {
+                        ...fallbackResponse,
+                        apiNote: "API is not configured, but I can still help with documentation and guidance.",
+                        apiError: apiResult.error
+                    };
+                }
+                
+                return {
+                    answer: `I encountered an error while trying to ${actionName}: ${apiResult.error}. Let me help you with documentation instead.`,
+                    success: false,
+                    apiError: apiResult.error,
+                    actionName: actionName
+                };
+            }
+            
+            // Format the successful API response for the user
+            const formattingPrompt = `You are a Response Formatter for API results. Your job is to present API results in a user-friendly way.
+
+USER REQUEST: "${userMessage}"
+API ACTION EXECUTED: ${actionName}
+API RESULT: ${JSON.stringify(apiResult.data, null, 2)}
+
+TASK: Create a clear, helpful response that:
+1. Confirms the action was completed successfully
+2. Presents the data in a user-friendly format
+3. Includes relevant details from the API response
+4. Suggests next steps if appropriate
+5. Responds in the same language as the user
+
+RESPONSE GUIDELINES:
+- Be conversational and helpful
+- Format data clearly (use bullets, numbers, etc.)
+- Include relevant details but avoid overwhelming the user
+- Suggest related actions they might want to take
+- If the data is empty or minimal, acknowledge that appropriately
+
+Generate ONLY the formatted response text (no JSON wrapper).`;
+
+            const formatResponse = await aiService.generateResponse(formattingPrompt, {
+                maxTokens: 800
+            });
+
+            console.log('✅ API action completed successfully');
+
+            return {
+                answer: formatResponse.answer,
+                success: true,
+                apiData: apiResult.data,
+                actionName: actionName,
+                parameters: parameters
+            };
+
+        } catch (error) {
+            console.error('❌ Error executing API action:', error);
+            
+            // Fallback to documentation
+            const fallbackResponse = await this.generalKnowledge(userMessage, conversationHistory, userApiToken);
+            return {
+                ...fallbackResponse,
+                apiNote: "API action failed, providing documentation instead.",
+                apiError: error.message
             };
         }
     }

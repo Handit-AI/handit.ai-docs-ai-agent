@@ -1,0 +1,71 @@
+{
+  "baseUrl": {
+    "env": "API_URL",
+    "description": "Base URL for the API service"
+  },
+  "authentication": {
+    "type": "bearer",
+    "tokenEnv": "API_KEY",
+    "description": "API authentication using Bearer token"
+  },
+  "actions": {
+    "get_integration_tokens_list": {
+      "method": "GET",
+      "endpoint": "/api/integration-tokens",
+      "description": "Get list of existing integration tokens",
+      "parameters": {
+        "optional": ["limit", "offset"]
+      }
+    },
+    "create_integration_token_new": {
+      "method": "POST",
+      "endpoint": "/api/integration-tokens",
+      "description": "Create a new integration token",
+      "parameters": {
+        "required": ["providerId", "name", "token"],
+        "optional": ["type"]
+      },
+      "requestBody": {
+        "providerId": "string",
+        "name": "string",
+        "type": "string",
+        "token": "string"
+      }
+    },
+    "get_providers": {
+      "method": "GET",
+      "endpoint": "/api/providers",
+      "description": "Get list of available providers",
+      "parameters": {
+        "optional": ["limit", "offset"]
+      }
+    },
+    "get_evaluation_prompts": {
+      "method": "GET",
+      "endpoint": "/api/reviewers-template/evaluation-prompts",
+      "description": "Get available evaluators/evaluation prompts",
+      "parameters": {
+        "optional": ["category", "limit", "offset"]
+      }
+    },
+    "get_user_models": {
+      "method": "GET",
+      "endpoint": "/api/models/me",
+      "description": "Get user's models/nodes",
+      "parameters": {
+        "optional": ["limit", "offset"]
+      }
+    },
+    "associate_evaluator_to_model_new": {
+      "method": "POST",
+      "endpoint": "/api/reviewers-template/models/{modelId}/evaluation-prompts",
+      "description": "Associate an evaluator to a model",
+      "parameters": {
+        "required": ["modelId", "evaluationPromptId"]
+      },
+      "requestBody": {
+        "evaluationPromptId": "string"
+      }
+    }
+  }
+} 
