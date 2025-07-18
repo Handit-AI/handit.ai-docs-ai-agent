@@ -80,7 +80,7 @@ async function handleLegacyConversation(req, res) {
             metadata: {
                 processingTimeMs: processingTime,
                 timestamp: new Date().toISOString(),
-                model: process.env.OPENAI_MODEL || 'gpt-4o-mini'
+                model: process.env.OPENAI_MODEL || 'gpt-4o'
             }
         });
 
