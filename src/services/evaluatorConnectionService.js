@@ -72,30 +72,30 @@ Return JSON:
         try {
             console.log(`🔗 Starting evaluator connection flow for session: ${sessionId}`);
             
-            // Step 1: Get existing integration tokens
-            const tokensResult = await this.apiService.executeAction('get_integration_tokens_list', {}, userApiToken);
+            // Step 1: Get available evaluators first
+            const evaluatorsResult = await this.apiService.executeAction('get_evaluation_prompts', {}, userApiToken);
             
-            if (!tokensResult.success) {
+            if (!evaluatorsResult.success) {
                 return {
-                    answer: `I encountered an error getting your integration tokens: ${tokensResult.error}. Please make sure you have the correct API access.`,
+                    answer: `I encountered an error getting available evaluators: ${evaluatorsResult.error}. Please make sure you have the correct API access.`,
                     success: false,
                     step: 'error'
                 };
             }
 
-            const existingTokens = tokensResult.data || [];
+            const evaluators = evaluatorsResult.data.data || [];
             
             // Store state for this conversation
             this.conversationStates.set(sessionId, {
-                step: 'token_selection',
-                existingTokens: existingTokens,
+                step: 'evaluator_selection',
+                availableEvaluators: evaluators,
                 userApiToken: userApiToken
             });
 
-            console.log(`🎯 Found ${existingTokens.length} existing tokens, generating AI response...`);
+            console.log(`🎯 Found ${evaluators.length} available evaluators, generating AI response...`);
 
-            // Use AI to generate intelligent response based on existing tokens
-            return await this.generateAITokenResponse(existingTokens, sessionId);
+            // Use AI to generate intelligent response for evaluator selection
+            return await this.generateInitialEvaluatorSelectionResponse(evaluators, sessionId);
 
         } catch (error) {
             console.error('Error starting evaluator connection flow:', error);
@@ -103,6 +103,66 @@ Return JSON:
                 answer: "I encountered an error starting the evaluator connection process. Please try again.",
                 success: false,
                 step: 'error'
+            };
+        }
+    }
+
+    /**
+     * Generate AI-driven response for initial evaluator selection
+     * @param {Array} evaluators - Available evaluators
+     * @param {string} sessionId - Session identifier
+     * @returns {Promise<Object>} AI-generated response
+     */
+    async generateInitialEvaluatorSelectionResponse(evaluators, sessionId) {
+        try {
+            console.log(`🤖 Generating AI response for ${evaluators.length} evaluators`);
+            
+            const evaluatorsContext = evaluators.length > 0 
+                ? evaluators.map(evaluator => `- ${evaluator.name || evaluator.title}: ${evaluator.description || 'Evaluation tool'}`).join('\n')
+                : 'No evaluators found';
+
+            const aiPrompt = `You are helping a user associate evaluators with their AI models. Start by helping them select an evaluator.
+
+AVAILABLE EVALUATORS:
+${evaluatorsContext}
+
+CONTEXT: The user wants to associate evaluators with their AI models. They need to first choose which evaluator to work with.
+
+TASK: Generate a brief response that:
+1. Acknowledges their request to associate evaluators
+2. Explains they need to select an evaluator first
+3. Lists the available evaluators clearly
+4. Offers the option to create a new evaluator or edit existing ones
+5. Asks them to choose an evaluator or let you know if they want to create/edit
+
+GUIDELINES:
+- Be helpful but very concise
+- Keep explanations brief and to the point
+- Make it conversational but brief
+- Mention they can also create new or edit existing evaluators
+
+Generate a brief evaluator selection response:`;
+
+            const response = await aiService.generateResponse(aiPrompt, { maxTokens: 200 });
+
+            console.log(`✅ Generated AI evaluator response: ${response.answer.substring(0, 100)}...`);
+
+            return {
+                answer: response.answer,
+                success: true,
+                step: 'evaluator_selection',
+                availableEvaluators: evaluators,
+                customAction: 'evaluator_management' // Signal to frontend for create/edit options
+            };
+
+        } catch (error) {
+            console.error('Error generating evaluator selection response:', error);
+            return {
+                answer: "I'm ready to help you associate evaluators with your models. Please choose an evaluator from the available options, or let me know if you'd like to create a new one or edit an existing evaluator.",
+                success: true,
+                step: 'evaluator_selection',
+                availableEvaluators: evaluators,
+                customAction: 'evaluator_management'
             };
         }
     }
@@ -864,8 +924,8 @@ Generate a helpful token value request:`;
             state.selectedToken = createResult.data;
             console.log(`✅ Created integration token: ${state.tokenCreation.name}`);
             
-            // Generate success response and proceed to evaluator selection
-            return await this.generateTokenCreationSuccessResponse(state.tokenCreation.name, sessionId);
+            // After token creation, ask for provider model selection
+            return await this.proceedToProviderModelSelection(sessionId);
 
         } catch (error) {
             console.error('Error in AI token value input:', error);
@@ -1187,30 +1247,147 @@ Generate a helpful evaluator selection response:`;
         }
 
         try {
-            // Use AI to understand which evaluators the user wants
-            const evaluatorAnalysis = await this.analyzeEvaluatorSelection(userResponse, state.availableEvaluators);
+            console.log(`🎯 Processing evaluator selection: "${userResponse}"`);
+
+            // Check if user wants to create new or edit evaluators
+            const createEditAnalysis = await this.analyzeCreateEditIntent(userResponse);
+            
+            if (createEditAnalysis.wantsToCreateEdit) {
+                return {
+                    answer: "To create a new evaluator or edit an existing one, please use the evaluator management section in your dashboard. You can create custom evaluators with specific prompts and configurations there. Once you've created your evaluator, come back and I'll help you associate it with your models.",
+                    success: true,
+                    step: 'evaluator_management_redirect',
+                    customAction: 'redirect_to_evaluator_management',
+                    custom_evaluator_management: true
+                };
+            }
+
+            // Use AI to understand which evaluator the user wants (single evaluator selection)
+            const evaluatorAnalysis = await this.analyzeSingleEvaluatorSelection(userResponse, state.availableEvaluators);
             
             console.log('🧠 Evaluator selection analysis:', evaluatorAnalysis);
 
-            if (evaluatorAnalysis.selectedEvaluators.length === 0) {
-                // AI couldn't identify clear selections, ask for clarification
+            if (!evaluatorAnalysis.selectedEvaluator) {
+                // AI couldn't identify clear selection, ask for clarification
                 return await this.generateEvaluatorClarificationResponse(userResponse, state.availableEvaluators);
             }
 
-            // Store selected evaluators
-            state.selectedEvaluators = evaluatorAnalysis.selectedEvaluators;
-            console.log(`📋 Selected ${state.selectedEvaluators.length} evaluators via AI analysis`);
+            // Store selected evaluator (single)
+            state.selectedEvaluator = evaluatorAnalysis.selectedEvaluator;
+            console.log(`📋 Selected evaluator: ${state.selectedEvaluator.name || state.selectedEvaluator.title}`);
             
-            // Proceed to model selection
-            return await this.proceedToModelSelection(sessionId);
+            // Check if evaluator has a default token
+            return await this.checkEvaluatorToken(sessionId);
 
         } catch (error) {
             console.error('Error in AI evaluator selection:', error);
             return {
-                answer: "I had trouble understanding which evaluators you'd like. Could you tell me which specific evaluators you want to use?",
+                answer: "I had trouble understanding which evaluator you'd like. Could you tell me which specific evaluator you want to use?",
                 success: true,
                 step: 'evaluator_selection'
             };
+        }
+    }
+
+    /**
+     * Analyze if user wants to create new or edit evaluators
+     * @param {string} userResponse - User's response
+     * @returns {Promise<Object>} Analysis result
+     */
+    async analyzeCreateEditIntent(userResponse) {
+        try {
+            const intentPrompt = `Analyze if the user wants to create a new evaluator or edit existing evaluators.
+
+USER RESPONSE: "${userResponse}"
+
+TASK: Determine if the user wants to create/edit evaluators rather than select from existing ones.
+
+INDICATORS FOR CREATE/EDIT:
+- "create new", "new evaluator", "make new"
+- "edit", "modify", "change", "customize"
+- "create custom", "build my own"
+- "none of these", "don't want any of these"
+
+RESPONSE FORMAT (JSON):
+{
+  "wantsToCreateEdit": true/false,
+  "confidence": 0.0-1.0,
+  "reasoning": "brief explanation"
+}
+
+Return ONLY valid JSON:`;
+
+            const response = await aiService.generateResponse(intentPrompt, { maxTokens: 150 });
+            const result = JSON.parse(response.answer.match(/\{[\s\S]*\}/)?.[0] || '{"wantsToCreateEdit": false, "confidence": 0.0, "reasoning": "Parse error"}');
+            
+            return result;
+
+        } catch (error) {
+            console.error('Error analyzing create/edit intent:', error);
+            return { wantsToCreateEdit: false, confidence: 0.0, reasoning: 'Analysis error' };
+        }
+    }
+
+    /**
+     * Analyze single evaluator selection using AI
+     * @param {string} userResponse - User's response
+     * @param {Array} availableEvaluators - Available evaluators
+     * @returns {Promise<Object>} Analysis result
+     */
+    async analyzeSingleEvaluatorSelection(userResponse, availableEvaluators) {
+        try {
+            const evaluatorsContext = availableEvaluators.map((evaluator, index) => 
+                `${index}: ${evaluator.name || evaluator.title} - ${evaluator.description || 'Evaluation tool'}`
+            ).join('\n');
+
+            const analysisPrompt = `Analyze the user's response to identify which single evaluator they want to select.
+
+USER RESPONSE: "${userResponse}"
+
+AVAILABLE EVALUATORS:
+${evaluatorsContext}
+
+TASK: Identify which specific evaluator the user wants. They can only select ONE evaluator at a time.
+
+RESPONSE FORMAT (JSON):
+{
+  "selectedEvaluator": evaluator_object_or_null,
+  "confidence": 0.0-1.0,
+  "reasoning": "explanation of how selection was made"
+}
+
+EXAMPLES:
+- "safety evaluator" → find evaluator with safety in name or description
+- "content safety" → find exact or close name match
+- "the first one" → select first evaluator
+- "accuracy checker" → find evaluator matching description
+
+Return ONLY valid JSON with the actual evaluator object:`;
+
+            const response = await aiService.generateResponse(analysisPrompt, { maxTokens: 300 });
+            const result = JSON.parse(response.answer.match(/\{[\s\S]*\}/)?.[0] || '{"selectedEvaluator": null, "confidence": 0.0, "reasoning": "Parse error"}');
+            
+            // Validate and find the actual evaluator
+            let selectedEvaluator = null;
+            if (result.selectedEvaluator) {
+                // Find matching evaluator by index, name, or description
+                selectedEvaluator = availableEvaluators.find((evaluator, index) => 
+                    index === result.selectedEvaluator.index ||
+                    (evaluator.name || evaluator.title || '').toLowerCase().includes((result.selectedEvaluator.name || '').toLowerCase()) ||
+                    evaluator.id === result.selectedEvaluator.id ||
+                    (userResponse.toLowerCase().includes((evaluator.name || evaluator.title || '').toLowerCase()))
+                );
+            }
+            
+            return {
+                selectedEvaluator: selectedEvaluator,
+                confidence: result.confidence || 0.0,
+                reasoning: result.reasoning || 'AI analysis'
+            };
+
+        } catch (error) {
+            console.error('Error analyzing evaluator selection:', error);
+            return { selectedEvaluator: null, confidence: 0.0, reasoning: 'Analysis error' };
         }
     }
 
@@ -1660,6 +1837,7 @@ Generate a helpful clarification response:`;
                 answer: response,
                 success: results.length > 0,
                 step: 'completed',
+                evaluators_added: true,
                 summary: {
                     successful: results.length,
                     failed: errors.length,
@@ -1737,20 +1915,19 @@ Generate a helpful clarification response:`;
         }, null, 2));
 
         switch (state.step) {
-            case 'token_selection':
-            case 'token_analysis':
-                console.log(`🎯 Handling token selection step...`);
-                return await this.handleTokenSelection(sessionId, userResponse);
+            case 'evaluator_selection':
+                console.log(`🎯 Handling evaluator selection step...`);
+                return await this.handleEvaluatorSelection(sessionId, userResponse);
             case 'provider_selection':
                 return await this.handleProviderSelection(sessionId, userResponse);
             case 'token_name_input':
                 return await this.handleTokenNameInput(sessionId, userResponse);
             case 'token_value_input':
                 return await this.handleTokenValueInput(sessionId, userResponse);
-            case 'evaluator_selection':
-                return await this.handleEvaluatorSelection(sessionId, userResponse);
-            case 'model_selection':
-                return await this.handleModelSelection(sessionId, userResponse);
+            case 'provider_model_selection':
+                return await this.handleProviderModelSelection(sessionId, userResponse);
+            case 'user_model_selection':
+                return await this.handleUserModelSelection(sessionId, userResponse);
             default:
                 // Use AI to understand what the user wants to do
                 return await this.handleUnknownStep(sessionId, userResponse, state);
@@ -1825,6 +2002,542 @@ Generate a helpful response:`;
      */
     cancelFlow(sessionId) {
         this.conversationStates.delete(sessionId);
+    }
+
+    /**
+     * Check if evaluator has a default token
+     * @param {string} sessionId - Session identifier
+     * @returns {Promise<Object>} Flow response
+     */
+    async checkEvaluatorToken(sessionId) {
+        const state = this.conversationStates.get(sessionId);
+        
+        try {
+            const evaluator = state.selectedEvaluator;
+            
+            if (evaluator.defaultIntegrationTokenId) {
+                console.log(`✅ Evaluator ${evaluator.name} already has a default token`);
+                // Evaluator has a token, proceed to model selection
+                return await this.proceedToUserModelSelection(sessionId);
+            } else {
+                console.log(`🔑 Evaluator ${evaluator.name} needs a token, starting token creation...`);
+                // Evaluator needs a token, start token creation process
+                return await this.proceedToTokenCreation(sessionId);
+            }
+
+        } catch (error) {
+            console.error('Error checking evaluator token:', error);
+            return {
+                answer: "I encountered an error checking the evaluator's token. Please try again.",
+                success: false,
+                step: 'error'
+            };
+        }
+    }
+
+    /**
+     * Proceed to token creation for evaluator
+     * @param {string} sessionId - Session identifier
+     * @returns {Promise<Object>} Flow response
+     */
+    async proceedToTokenCreation(sessionId) {
+        const state = this.conversationStates.get(sessionId);
+        
+        try {
+            // Get available providers
+            const providersResult = await this.apiService.executeAction('get_providers', {}, state.userApiToken);
+            
+            if (!providersResult.success) {
+                return {
+                    answer: `I couldn't get the list of available providers: ${providersResult.error}`,
+                    success: false
+                };
+            }
+
+            const providers = providersResult.data.data || [];
+            if (providers.length === 0) {
+                return {
+                    answer: "No providers are available at the moment. Please contact support.",
+                    success: false
+                };
+            }
+
+            // Update state
+            state.step = 'provider_selection';
+            state.providers = providers;
+            state.tokenCreation = {};
+            this.conversationStates.set(sessionId, state);
+
+            return {
+                answer: `The evaluator "${state.selectedEvaluator.name || state.selectedEvaluator.title}" needs an integration token to work. I'll help you create one. Which provider would you like to use for this evaluator? \n ${providers.map(provider => `- ${provider.name}`).join('\n')}`,
+                success: true,
+                step: 'provider_selection',
+                providers: providers
+            };
+
+        } catch (error) {
+            console.error('Error starting token creation for evaluator:', error);
+            return {
+                answer: "I encountered an error starting the token creation process. Please try again.",
+                success: false
+            };
+        }
+    }
+
+    /**
+     * Handle provider model selection after token creation
+     * @param {string} sessionId - Session identifier
+     * @param {string} userResponse - User's response
+     * @returns {Promise<Object>} Flow response
+     */
+    async handleProviderModelSelection(sessionId, userResponse) {
+        const state = this.conversationStates.get(sessionId);
+        if (!state || state.step !== 'provider_model_selection') {
+            return { answer: "I lost track of our conversation. Let's start over.", success: false };
+        }
+
+        try {
+            console.log(`🎯 Processing provider model selection: "${userResponse}"`);
+
+            // Use AI to understand which provider model the user wants
+            const modelAnalysis = await this.analyzeProviderModelSelection(userResponse, state.providerModels);
+            
+            console.log('🧠 Provider model selection analysis:', JSON.stringify(modelAnalysis, null, 2));
+
+            if (!modelAnalysis.selectedModel) {
+                return await this.generateProviderModelClarificationResponse(userResponse, state.providerModels);
+            }
+
+            // Store selected provider model
+            state.selectedProviderModel = modelAnalysis.selectedModel;
+            
+            // Update evaluator with default token and model
+            return await this.updateEvaluatorWithDefaults(sessionId);
+
+        } catch (error) {
+            console.error('Error in provider model selection:', error);
+            return {
+                answer: "I had trouble understanding which model you'd like to use. Could you tell me which specific model from the provider you want to use?",
+                success: true,
+                step: 'provider_model_selection'
+            };
+        }
+    }
+
+    /**
+     * Analyze provider model selection using AI
+     * @param {string} userResponse - User's response
+     * @param {Array} availableModels - Available provider models
+     * @returns {Promise<Object>} Analysis result
+     */
+    async analyzeProviderModelSelection(userResponse, availableModels) {
+        try {
+            const modelsContext = availableModels.map((model, index) => 
+                `${index}: ${model}`
+            ).join('\n');
+
+            const analysisPrompt = `Analyze the user's response to identify which provider model they want to select.
+
+USER RESPONSE: "${userResponse}"
+
+AVAILABLE PROVIDER MODELS:
+${modelsContext}
+
+TASK: Identify which specific provider model the user wants based on their response.
+
+RESPONSE FORMAT (JSON):
+{
+  "selectedModel": model_name,
+  "confidence": 0.0-1.0,
+  "reasoning": "explanation of how selection was made"
+}
+
+Return ONLY valid JSON with the actual model object:`;
+
+            const response = await aiService.generateResponse(analysisPrompt, { maxTokens: 200 });
+            const result = JSON.parse(response.answer.match(/\{[\s\S]*\}/)?.[0] || '{"selectedModel": null, "confidence": 0.0, "reasoning": "Parse error"}');
+            
+            // Validate and find the actual model
+            let selectedModel = null;
+            if (result.selectedModel) {
+                selectedModel = availableModels.find((model, index) => 
+                    index === result.selectedModel.index ||
+                    (model).toLowerCase().includes((result.selectedModel || '').toLowerCase())
+                );
+            }
+            
+            return {
+                selectedModel: selectedModel,
+                confidence: result.confidence || 0.0,
+                reasoning: result.reasoning || 'AI analysis'
+            };
+
+        } catch (error) {
+            console.error('Error analyzing provider model selection:', error);
+            return { selectedModel: null, confidence: 0.0, reasoning: 'Analysis error' };
+        }
+    }
+
+    /**
+     * Generate clarification response for provider model selection
+     * @param {string} userResponse - User's response
+     * @param {Array} availableModels - Available models
+     * @returns {Promise<Object>} Clarification response
+     */
+    async generateProviderModelClarificationResponse(userResponse, availableModels) {
+        try {
+            const modelsContext = availableModels.map(model => 
+                `- ${model}`
+            ).join('\n');
+
+            const clarificationPrompt = `The user gave an unclear response about provider model selection. Generate a brief clarification.
+
+USER'S RESPONSE: "${userResponse}"
+
+AVAILABLE MODELS:
+${modelsContext}
+
+TASK: Generate a brief response that asks for clarification about which provider model they want.
+
+Generate a brief clarification response:`;
+
+            const response = await aiService.generateResponse(clarificationPrompt, { maxTokens: 150 });
+
+            return {
+                answer: response.answer,
+                success: true,
+                step: 'provider_model_selection'
+            };
+
+        } catch (error) {
+            console.error('Error generating provider model clarification:', error);
+            return {
+                answer: "I want to make sure I select the right model from the provider. Could you tell me which specific model you'd like to use?",
+                success: true,
+                step: 'provider_model_selection'
+            };
+        }
+    }
+
+    /**
+     * Update evaluator with default token and model
+     * @param {string} sessionId - Session identifier
+     * @returns {Promise<Object>} Flow response
+     */
+    async updateEvaluatorWithDefaults(sessionId) {
+        const state = this.conversationStates.get(sessionId);
+        
+        try {
+            console.log(`🔄 Updating evaluator with default token and model...`);
+
+            const updateResult = await this.apiService.executeAction('update_evaluator_defaults', {
+                id: state.selectedEvaluator.id,
+                defaultIntegrationTokenId: state.selectedToken.id,
+                defaultProviderModel: state.selectedProviderModel
+            }, state.userApiToken);
+
+            if (!updateResult.success) {
+                return {
+                    answer: `I couldn't update the evaluator with the default settings: ${updateResult.error}`,
+                    success: false
+                };
+            }
+
+            console.log(`✅ Evaluator updated with defaults`);
+
+            // Now proceed to user model selection
+            return await this.proceedToUserModelSelection(sessionId);
+
+        } catch (error) {
+            console.error('Error updating evaluator with defaults:', error);
+            return {
+                answer: "I encountered an error updating the evaluator. Please try again.",
+                success: false
+            };
+        }
+    }
+
+    /**
+     * Proceed to user model selection (renamed from proceedToModelSelection)
+     * @param {string} sessionId - Session identifier
+     * @returns {Promise<Object>} Flow response
+     */
+    async proceedToUserModelSelection(sessionId) {
+        const state = this.conversationStates.get(sessionId);
+        
+        try {
+            console.log(`🏗️ Getting user models...`);
+            
+            // Get user's models/nodes
+            const modelsResult = await this.apiService.executeAction('get_user_models', {}, state.userApiToken);
+            console.log('🔍 Models result:', modelsResult);
+            if (!modelsResult.success) {
+                return {
+                    answer: `I couldn't get your models: ${modelsResult.error}`,
+                    success: false
+                };
+            }
+
+            const models = modelsResult.data || [];
+            if (models.length === 0) {
+                return {
+                    answer: "You don't have any models in your account yet. Please create a model first before associating evaluators.",
+                    success: false
+                };
+            }
+
+            // Update state
+            state.step = 'user_model_selection';
+            state.availableModels = models;
+            this.conversationStates.set(sessionId, state);
+
+            // Generate AI-driven response for model selection
+            return await this.generateUserModelSelectionResponse(models, state.selectedEvaluator);
+
+        } catch (error) {
+            console.error('Error getting user models:', error);
+            return {
+                answer: "I encountered an error getting your models. Please try again.",
+                success: false
+            };
+        }
+    }
+
+    /**
+     * Generate AI-driven response for user model selection
+     * @param {Array} models - Available user models
+     * @param {Object} selectedEvaluator - Selected evaluator
+     * @returns {Promise<Object>} AI-generated response
+     */
+    async generateUserModelSelectionResponse(models, selectedEvaluator) {
+        try {
+            const modelsContext = models.map(model => 
+                `- ${model.name}: ${model.description || 'AI model'}`
+            ).join('\n');
+
+            const evaluatorName = selectedEvaluator.name || selectedEvaluator.title;
+
+            const selectionPrompt = `You are guiding a user through the final step of evaluator association. Generate a brief response.
+
+CONTEXT: The user has configured the evaluator "${evaluatorName}" and now needs to choose which of their models to associate it with.
+
+AVAILABLE MODELS:
+${modelsContext}
+
+TASK: Generate a brief response that:
+1. Explains this is the final step
+2. Presents the available models clearly
+3. Asks them to choose which models they want to associate with the evaluator
+
+GUIDELINES:
+- Be helpful but very concise
+- Explain that the evaluator will monitor these models briefly
+- Make it conversational but brief
+- Suggest they can choose specific models or all models
+- Always list all the models
+
+Generate a brief final step response:`;
+
+            const response = await aiService.generateResponse(selectionPrompt, { maxTokens: 200 });
+
+            return {
+                answer: response.answer,
+                success: true,
+                step: 'user_model_selection',
+                availableModels: models
+            };
+
+        } catch (error) {
+            console.error('Error generating user model selection response:', error);
+            return {
+                answer: `Perfect! Now I need to know which of your models you'd like to associate with the "${selectedEvaluator.name || selectedEvaluator.title}" evaluator. Which models should I connect it to?`,
+                success: true,
+                step: 'user_model_selection',
+                availableModels: models
+            };
+        }
+    }
+
+    /**
+     * Proceed to provider model selection after token creation
+     * @param {string} sessionId - Session identifier
+     * @returns {Promise<Object>} Flow response
+     */
+    async proceedToProviderModelSelection(sessionId) {
+        const state = this.conversationStates.get(sessionId);
+        
+        try {
+            console.log(`🏗️ Getting provider models for ${state.tokenCreation.providerName}...`);
+            
+            // Find the selected provider from the existing providers data
+            const selectedProvider = state.providers.find(provider => 
+                provider.id == state.tokenCreation.providerId
+            );
+
+            if (!selectedProvider) {
+                return {
+                    answer: `I couldn't find the provider information for ${state.tokenCreation.providerName}. Please try again.`,
+                    success: false
+                };
+            }
+
+            // Extract models from provider config
+            let providerModels = [];
+            try {
+              console.log("selectedProvider", selectedProvider);
+                const config = typeof selectedProvider.config === 'string' 
+                    ? JSON.parse(selectedProvider.config) 
+                    : selectedProvider.config;
+                
+                providerModels = config?.models || [];
+            } catch (configError) {
+                console.error('Error parsing provider config:', configError);
+                providerModels = [];
+            }
+
+            if (providerModels.length === 0) {
+                return {
+                    answer: `${state.tokenCreation.providerName} doesn't have any available models configured. Please contact support.`,
+                    success: false
+                };
+            }
+
+            // Update state
+            state.step = 'provider_model_selection';
+            state.providerModels = providerModels;
+            this.conversationStates.set(sessionId, state);
+
+            console.log(`📋 Found ${providerModels.length} models in ${state.tokenCreation.providerName} config`);
+
+            return {
+                answer: `Great! I've created the integration token "${state.tokenCreation.name}". Now I need to know which model from ${state.tokenCreation.providerName} you'd like to use as the default for this evaluator. Which model would you like to use? \n ${providerModels.map(model => `- ${model}`).join('\n')}`,
+                success: true,
+                step: 'provider_model_selection',
+                providerModels: providerModels
+            };
+
+        } catch (error) {
+            console.error('Error getting provider models from config:', error);
+            return {
+                answer: "I encountered an error getting the provider models. Please try again.",
+                success: false
+            };
+        }
+    }
+
+    /**
+     * Handle user model selection for association
+     * @param {string} sessionId - Session identifier
+     * @param {string} userResponse - User's response
+     * @returns {Promise<Object>} Flow response
+     */
+    async handleUserModelSelection(sessionId, userResponse) {
+        const state = this.conversationStates.get(sessionId);
+        if (!state || state.step !== 'user_model_selection') {
+            return { answer: "I lost track of our conversation. Let's start over.", success: false };
+        }
+
+        try {
+            // Use AI to understand which models the user wants
+            const modelAnalysis = await this.analyzeModelSelection(userResponse, state.availableModels);
+            
+            console.log('🧠 User model selection analysis:', modelAnalysis);
+
+            if (modelAnalysis.selectedModels.length === 0) {
+                // AI couldn't identify clear selections, ask for clarification
+                return await this.generateModelClarificationResponse(userResponse, state.availableModels);
+            }
+
+            const selectedModels = modelAnalysis.selectedModels;
+            
+            console.log(`🔗 Starting associations for ${selectedModels.length} models and 1 evaluator`);
+            
+            // Perform associations (single evaluator to multiple models)
+            return await this.performSingleEvaluatorAssociations(sessionId, selectedModels, state.selectedEvaluator, state.userApiToken);
+
+        } catch (error) {
+            console.error('Error in AI user model selection:', error);
+            return {
+                answer: "I had trouble understanding which models you'd like. Could you tell me which specific models you want to associate the evaluator with?",
+                success: true,
+                step: 'user_model_selection'
+            };
+        }
+    }
+
+    /**
+     * Perform associations for a single evaluator to multiple models
+     * @param {string} sessionId - Session identifier
+     * @param {Array} models - Selected user models
+     * @param {Object} evaluator - Selected evaluator
+     * @param {string} userApiToken - User's API token
+     * @returns {Promise<Object>} Flow response
+     */
+    async performSingleEvaluatorAssociations(sessionId, models, evaluator, userApiToken) {
+        try {
+            const results = [];
+            const errors = [];
+
+            // Perform associations for each model with the single evaluator
+            for (const model of models) {
+                try {
+                    const associationResult = await this.apiService.executeAction('associate_evaluator_to_model_new', {
+                        modelId: model.id,
+                        evaluationPromptId: evaluator.id
+                    }, userApiToken);
+
+                    if (associationResult.success) {
+                        results.push(`✅ ${evaluator.name || evaluator.title} → ${model.name}`);
+                    } else {
+                        errors.push(`❌ ${evaluator.name || evaluator.title} → ${model.name}: ${associationResult.error}`);
+                    }
+                } catch (error) {
+                    errors.push(`❌ ${evaluator.name || evaluator.title} → ${model.name}: ${error.message}`);
+                }
+            }
+
+            // Clean up state
+            this.conversationStates.delete(sessionId);
+
+            // Generate summary response
+            let response = `🎉 **Evaluator Association Complete!**\n\n`;
+            
+            if (results.length > 0) {
+                response += `**Successful Associations:**\n${results.join('\n')}\n\n`;
+            }
+            
+            if (errors.length > 0) {
+                response += `**Failed Associations:**\n${errors.join('\n')}\n\n`;
+            }
+            
+            response += `Summary: ${results.length} successful, ${errors.length} failed out of ${results.length + errors.length} total associations.`;
+            
+            if (errors.length === 0) {
+                response += `\n\n✨ The evaluator "${evaluator.name || evaluator.title}" has been successfully associated with your models! It will now evaluate their performance.`;
+            }
+
+            return {
+                answer: response,
+                success: results.length > 0,
+                step: 'completed',
+                evaluators_added: true,
+                summary: {
+                    successful: results.length,
+                    failed: errors.length,
+                    total: results.length + errors.length
+                }
+            };
+
+        } catch (error) {
+            console.error('Error performing single evaluator associations:', error);
+            this.conversationStates.delete(sessionId);
+            return {
+                answer: "I encountered an error while performing the evaluator associations. Please try again.",
+                success: false,
+                step: 'error',
+                evaluators_added: false
+            };
+        }
     }
 }
 

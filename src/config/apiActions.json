@@ -66,6 +66,18 @@
       "requestBody": {
         "evaluationPromptId": "string"
       }
+    },
+    "update_evaluator_defaults": {
+      "method": "PUT",
+      "endpoint": "/api/reviewers-template/evaluation-prompts/{id}",
+      "description": "Update evaluator with default integration token and provider model",
+      "parameters": {
+        "required": ["id", "defaultIntegrationTokenId", "defaultProviderModel"]
+      },
+      "requestBody": {
+        "defaultIntegrationTokenId": "string",
+        "defaultProviderModel": "string"
+      }
     }
   }
 } 

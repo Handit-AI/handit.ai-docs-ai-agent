@@ -80,6 +80,8 @@ class AgenticAI {
                     onBoarding: onBoardingResponse,
                     extractedInfo: onBoardingResponse.extractedInfo,
                     nodeType: "on_boarding_process",
+                    evaluators_added: onBoardingResponse.evaluators_added,
+                    custom_evaluator_management: onBoardingResponse.custom_evaluator_management,
                     on_boarding_observability_finished: onBoardingResponse.on_boarding_observability_finished
                 };
             } else {
@@ -466,6 +468,8 @@ Return ONLY valid JSON.`;
                     phaseDetails: phaseResult,
                     extractedInfo: null,
                     generalKnowledge: generalResponse,
+                    evaluators_added: generalResponse.evaluators_added,
+                    custom_evaluator_management: generalResponse.custom_evaluator_management,
                     nextSteps: [],
                     explanation: "User not starting from scratch, providing contextual response via generalKnowledge"
                 };

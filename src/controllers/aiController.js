@@ -73,6 +73,9 @@ async function handleLegacyConversation(req, res) {
             totalSources: response.totalSources,
             requiresUserInput: response.requiresUserInput || false,
             nextAction: response.nextAction || 'continue',
+            customAction: response.customAction, // For frontend UI actions
+            evaluators_added: response.evaluators_added, // For evaluator association detection
+            custom_evaluator_management: response.custom_evaluator_management, // For evaluator management detection
             metadata: {
                 processingTimeMs: processingTime,
                 timestamp: new Date().toISOString(),
