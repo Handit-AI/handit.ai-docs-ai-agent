@@ -44,9 +44,7 @@ app.use(helmet());
 // CORS (Cross-Origin Resource Sharing) configuration
 // Allows specific origins to access the API based on environment
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://yourdomain.com'] // Production allowed origins
-    : ['http://localhost:3000', 'http://localhost:3001'], // Development allowed origins
+  origin: ['http://localhost:3000', 'http://localhost:3001', 'https://dashboard.handit.ai', 'https://handit.ai', 'https://beta.handit.ai'], // Development allowed origins
   credentials: true // Allow credentials (cookies, authorization headers)
 }));
 
