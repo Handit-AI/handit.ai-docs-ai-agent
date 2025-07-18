@@ -183,7 +183,7 @@ class AIService {
             } = options;
 
             // Get model from environment variable
-            const modelName = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+            const modelName = process.env.OPENAI_MODEL || 'gpt-4o';
             
             // Build messages
             const messages = [];
@@ -220,7 +220,7 @@ class AIService {
      */
     createOptimizedSystemPrompt(retrievedContext, conversationHistoryContext) {
         // For o1 models, use simpler prompts
-        const modelName = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
+        const modelName = process.env.OPENAI_MODEL || 'gpt-4o';
         const isO1Model = modelName.includes('o1');
         
         if (isO1Model) {

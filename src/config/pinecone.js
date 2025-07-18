@@ -24,7 +24,7 @@ const initializePinecone = async () => {
     
     try {
         const indexName = process.env.PINECONE_INDEX;
-        const namespace = process.env.PINECONE_NAMESPACE || 'HANDIT';
+        const namespace = process.env.PINECONE_NAMESPACE || 'default';
         
         // Get index instance
         const baseIndex = client.index(indexName);
