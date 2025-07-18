@@ -3,6 +3,12 @@ steps:
     args:
       - build
       - '--no-cache'
+      - '--build-arg'
+      - 'BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")'
+      - '--build-arg'
+      - 'COMMIT_SHA=$COMMIT_SHA'
+      - '--build-arg'
+      - 'BUILD_ID=$BUILD_ID'
       - '-t'
       - >-
         $_AR_HOSTNAME/$PROJECT_ID/cloud-run-source-deploy/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA

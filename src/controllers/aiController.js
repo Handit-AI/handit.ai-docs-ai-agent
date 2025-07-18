@@ -57,6 +57,7 @@ async function handleLegacyConversation(req, res) {
         await conversationService.saveMessage(conversation.id, 'assistant', response.answer);
         
         const processingTime = Date.now() - startTime;
+        console.log("🚀 DEPLOYMENT_CHECK: Code version EVALUATOR_FLOW_V2.1 - " + new Date().toISOString());
         console.log("process.env.OPENAI_MODEL", process.env.OPENAI_MODEL);
         // Return guided response
         res.json({
@@ -316,6 +317,89 @@ async function testApiIntegration(req, res) {
     }
 }
 
+/**
+ * Get deployment version and build info
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+async function getVersionInfo(req, res) {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        
+        // Try to get package.json info
+        let packageInfo = {};
+        try {
+            const packagePath = path.join(process.cwd(), 'package.json');
+            const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+            packageInfo = {
+                name: packageJson.name,
+                version: packageJson.version
+            };
+        } catch (e) {
+            packageInfo = { error: 'Could not read package.json' };
+        }
+
+        // Get current commit hash if available
+        let gitInfo = {};
+        try {
+            const gitHeadPath = path.join(process.cwd(), '.git/HEAD');
+            if (fs.existsSync(gitHeadPath)) {
+                const head = fs.readFileSync(gitHeadPath, 'utf8').trim();
+                if (head.startsWith('ref:')) {
+                    const refPath = path.join(process.cwd(), '.git', head.substring(5));
+                    if (fs.existsSync(refPath)) {
+                        gitInfo.commit = fs.readFileSync(refPath, 'utf8').trim();
+                        gitInfo.branch = head.split('/').pop();
+                    }
+                } else {
+                    gitInfo.commit = head;
+                }
+            }
+        } catch (e) {
+            gitInfo = { error: 'Could not read git info' };
+        }
+
+        res.json({
+            deploymentVersion: "EVALUATOR_FLOW_V2.1",
+            buildTimestamp: new Date().toISOString(),
+            nodeVersion: process.version,
+            environment: process.env.NODE_ENV || 'development',
+            packageInfo: packageInfo,
+            gitInfo: gitInfo,
+            uptime: Math.floor(process.uptime()),
+            // Build info from environment (set by Docker build)
+            buildInfo: {
+                buildDate: process.env.BUILD_DATE || 'unknown',
+                commitSha: process.env.COMMIT_SHA || 'unknown',
+                buildId: process.env.BUILD_ID || 'unknown',
+                currentBranch: process.env.BRANCH || 'unknown'
+            },
+            // Runtime info
+            deploymentTime: new Date().toISOString(),
+            serverStartTime: new Date(Date.now() - process.uptime() * 1000).toISOString(),
+            evaluatorFlowEnabled: true,
+            features: {
+                evaluatorConnection: true,
+                aiDrivenFlow: true,
+                providerModelSelection: true,
+                handitTokenSupport: true,
+                versionEndpoint: true,
+                buildDebugging: true
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Version info error:', error);
+        
+        res.status(500).json({
+            error: 'Version info failed',
+            message: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+}
+
 module.exports = {
     handleLegacyConversation,
     getConversationHistory,
@@ -323,5 +407,6 @@ module.exports = {
     getHealthStatus,
     getPerformanceMetrics,
     handleDirectTest,
-    testApiIntegration
+    testApiIntegration,
+    getVersionInfo
 };

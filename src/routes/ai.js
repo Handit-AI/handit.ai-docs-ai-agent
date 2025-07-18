@@ -12,7 +12,8 @@ const {
     getHealthStatus,
     getPerformanceMetrics,
     handleDirectTest,
-    testApiIntegration
+    testApiIntegration,
+    getVersionInfo
 } = require('../controllers/aiController');
 const { validateQuestion } = require('../middleware/validation');
 
@@ -81,5 +82,13 @@ router.get('/metrics', getPerformanceMetrics);
  * @returns {Object} API integration test results
  */
 router.get('/test-api', testApiIntegration);
+
+/**
+ * @route GET /api/ai/version
+ * @desc Get deployment version and build information
+ * @access Public
+ * @returns {Object} Version, build info, and deployment details
+ */
+router.get('/version', getVersionInfo);
 
 module.exports = router; 

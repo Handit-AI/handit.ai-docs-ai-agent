@@ -1,6 +1,16 @@
 # Use the official Node.js 18 runtime as the base image
 FROM node:18-alpine
 
+# Build arguments for debugging
+ARG BUILD_DATE
+ARG COMMIT_SHA
+ARG BUILD_ID
+
+# Set environment variables for runtime access
+ENV BUILD_DATE=${BUILD_DATE}
+ENV COMMIT_SHA=${COMMIT_SHA}
+ENV BUILD_ID=${BUILD_ID}
+
 # Set the working directory inside the container
 WORKDIR /usr/src/app
 
