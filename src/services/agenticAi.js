@@ -36,16 +36,6 @@ class AgenticAI {
             // Get conversation history
             const conversationHistory = await this.conversationService.getConversationHistory(sessionId, 20);
 
-            // // Log conversation history
-            // console.log('\n📜 Conversation History:');
-            // if (conversationHistory.messages && conversationHistory.messages.length > 0) {
-            //     conversationHistory.messages.forEach((msg, index) => {
-            //         console.log(`${index + 1}. ${msg.role}: ${msg.content}`);
-            //     });
-            // } else {
-            //     console.log('No previous conversation history');
-            // }
-
             // Call RouterIntention LLM to classify user intention
             const intentionResult = await this.routerIntention(userMessage, conversationHistory);
 
