@@ -24,7 +24,7 @@ async function handleLegacyConversation(req, res) {
     const startTime = Date.now();
     
     try {
-        const { question, sessionId: providedSessionId } = req.body;
+        const { question, sessionId: providedSessionId, handitToken } = req.body;
         
         // Extract Authorization Bearer token from headers (for API calls, not endpoint auth)
         const authHeader = req.headers.authorization;
@@ -49,7 +49,7 @@ async function handleLegacyConversation(req, res) {
         console.log(`📝 Question: "${question.substring(0, 100)}${question.length > 100 ? '...' : ''}"`);
         
         // Process with guided agentic system, passing the user's API token
-        const response = await agenticAI.processUserInput(question, sessionId, userApiToken);
+        const response = await agenticAI.processUserInput(question, sessionId, userApiToken, handitToken);
         
         // Create or get conversation and save messages
         const conversation = await conversationService.createOrGetConversation(sessionId);
@@ -76,6 +76,7 @@ async function handleLegacyConversation(req, res) {
             customAction: response.customAction, // For frontend UI actions
             evaluators_added: response.evaluators_added, // For evaluator association detection
             custom_evaluator_management: response.custom_evaluator_management, // For evaluator management detection
+            handitTokenUsed: !!handitToken,
             metadata: {
                 processingTimeMs: processingTime,
                 timestamp: new Date().toISOString(),

@@ -244,24 +244,26 @@ tracker = HanditTracker()  # Creates a global tracker instance for consistent tr
 # Configure with your API key from environment variables
 tracker.config(api_key=os.getenv("HANDIT_API_KEY"))  # Sets up authentication for Handit.ai services`,
 
-    `Phase 1: AI Observability - Python Set up your start tracing, Track LLMs calls, tools in your workflow, Set up your end tracing Example
+    `Phase 1: AI Observability - Python Implementation Example
 
 This example uses three main Handit.ai tracing functions:
 
-startTracing({ agentName }): Starts a new trace session
-- agentName: The name of your AI Application
+1. startTracing({ agentName }): Starts a new trace session
+   - agentName: The name of your AI Application
 
-trackNode({ input, output, nodeName, agentName, nodeType, executionId }): Records individual operations
-- input: The input data for the operation (e.g., user message)
-- output: The result of the operation (e.g., generated response)
-- nodeName: Unique identifier for this operation (e.g., "response_generator")
-- agentName: The name of your AI Application
-- nodeType: Type of operation ("llm" for language model, "tool" for functions)
-- executionId: ID from startTracing to link operations together
+2. trackNode({ input, output, nodeName, agentName, nodeType, executionId }): Records individual operations
+   - input: The input data for the operation can be in (object format):
+     - For LLM nodes: {systemPrompt: "...", userPrompt: "...", extraDetails: {...}}
+     - For tool nodes: {toolName: "...", parameters: {...}, extraDetails: {...}}
+   - output: The result of the operation (e.g., generated response)
+   - nodeName: Unique identifier for this operation (e.g., "response_generator")
+   - agentName: The name of your AI Application
+   - nodeType: Type of operation ("llm" for language model, "tool" for functions)
+   - executionId: ID from startTracing to link operations together
 
-endTracing({ executionId, agentName }): Ends the trace session
-- executionId: The ID from startTracing to end
-- agentName: Must match the name used in startTracing
+3. endTracing({ executionId, agentName }): Ends the trace session
+   - executionId: The ID from startTracing
+   - agentName: Must match the name used in startTracing
 
 Complete example:
 
@@ -276,34 +278,106 @@ class CustomerServiceAgent:
     def __init__(self):
         # Initialize LLM for response generation
         self.llm = ChatOpenAI(model="gpt-4")
- 
-    async def generate_response(self, user_message: str) -> Dict[str, Any]:
+
+    async def generate_response(self, user_message: str, context: Dict[str, Any], execution_id: str) -> str:
         """
-        Generate a response using LLM.
+        Generate a response using LLM with context.
         """
-        prompt = f"Generate a helpful response to: {user_message}"
+        # Include context directly in the system prompt
+        context_text = "\n".join([doc["content"] for doc in context["similar_documents"]])
+        system_prompt = f"You are a helpful customer service agent. Use the provided context to give accurate information about our company.\n\nCompany Context: {context_text}"
+        
         try:
-            response = await self.llm.agenerate([prompt])
-            return response.generations[0][0].text
+            response = await self.llm.agenerate([system_prompt + "\n\nUser Question: " + user_message])
+            generated_text = response.generations[0][0].text
+            
+            # Track the LLM call with Handit.ai
+            tracker.track_node(
+                input={
+                    "systemPrompt": system_prompt,
+                    "userPrompt": user_message,
+                    "extraDetails": {
+                        "model": "gpt-4",
+                        "temperature": 0.7,
+                        "context_included": True,
+                        "context_documents": len(context["similar_documents"])
+                    }
+                },
+                output=generated_text,
+                node_name="response_generator",
+                agent_name="customer_service_agent",
+                node_type="llm",
+                execution_id=execution_id
+            )
+            
+            return generated_text
         except Exception as e:
             raise
- 
+
+    async def get_context_from_vector_db(self, query: str, execution_id: str) -> Dict[str, Any]:
+        """
+        Tool function to extract context from vector database (Chroma).
+        """
+        try:
+            # Simulating semantic search
+            # client = chromadb.Client()
+            # collection = client.get_collection("company_knowledge")
+            # results = await collection.query(query_texts=[query], n_results=2)
+            
+            #Example of Simulating semantic search
+            results = {
+                "query": query,
+                "similar_documents": [
+                    {
+                        "content": "Our AI platform offers automated evaluation, optimization, and real-time monitoring for LLM applications.",
+                        "similarity_score": 0.94,
+                        "document_id": "features_001"
+                    },
+                    {
+                        "content": "We provide SDKs for Python and JavaScript to integrate AI observability into your applications.",
+                        "similarity_score": 0.89,
+                        "document_id": "features_045"
+                    }
+                ],
+                "total_results": 2
+            }
+            
+            # Track the tool usage with Handit.ai
+            tracker.track_node(
+                input={
+                    "toolName": "get_context_from_vector_db",
+                    "parameters": {
+                        "query": query,
+                        "top_k": 2,
+                        "similarity_threshold": 0.8
+                    },
+                    "extraDetails": {
+                        "vector_db": "chroma",
+                        "collection": "company_knowledge",
+                        "embedding_model": "text-embedding-ada-002"
+                    }
+                },
+                output=results,
+                node_name="vector_context_retriever",
+                agent_name="customer_service_agent",
+                node_type="tool",
+                execution_id=execution_id
+            )
+            
+            return results
+        except Exception as e:
+            raise
+
     async def process_customer_request(self, user_message: str, execution_id: str) -> Dict[str, Any]:
         """
         Process a customer request with Handit.ai tracing.
         """
         try:
-            # Generate response
-            response = await self.generate_response(user_message)
-            # Track the response generation
-            tracker.track_node(
-                input=user_message,           # The original user message
-                output=response,              # The generated response
-                node_name="response_generator", # Unique identifier for this operation
-                agent_name="customer_service_agent", # Name of this AI Application
-                node_type="llm",              # Indicates this is a language model operation
-                execution_id=execution_id     # Links this operation to the current trace session
-            )
+            # Extract relevant context from vector database
+            context = await self.get_context_from_vector_db(user_message, execution_id)
+            
+            # Generate response with context (tracking happens inside generate_response)
+            response = await self.generate_response(user_message, context, execution_id)
             
             return {
                 "response": response
@@ -311,7 +385,7 @@ class CustomerServiceAgent:
             
         except Exception as e:
             raise
- 
+
 async def main():
     """Example of using the CustomerServiceAgent with Handit.ai tracing."""
     # Initialize the agent
@@ -319,23 +393,23 @@ async def main():
     
     # Start a new trace session
     tracing_response = tracker.start_tracing(
-        agent_name="customer_service_agent"  # Identifies this agent in the Handit.ai dashboard
+        agent_name="customer_service_agent"  # Identifies this agent in the Handit.ai dashboard, think of it like the App Name
     )
     execution_id = tracing_response.get("executionId")  # Unique ID for this trace session
     
     try:
         # Process a customer request
         result = await agent.process_customer_request(
-            user_message="I can't access my account",
+            user_message="What AI features does your platform offer for developers?",
             execution_id=execution_id
         )
         print(f"Response: {result['response']}")
     except Exception as e:
         print(f"Error processing request: {e}")
     finally:
-        # End the trace session
+        # End the trace session, when the workflow has finished
         tracker.end_tracing(
-            execution_id=execution_id,           # The ID of the trace session to end
+            execution_id=execution_id,           # The ID of the trace session
             agent_name="customer_service_agent"  # Must match the name used in start_tracing
         )
 
@@ -345,7 +419,7 @@ Phase 1 Complete! 🎉 You now have full observability with every operation, tim
 
     `Phase 1: AI Observability - JavaScript Setup
 
-This is the JavaScript Setup fot Observability.
+This is the JavaScript Setup for Observability.
 
 Step 1: Install the SDK
 npm install @handit.ai/node
@@ -369,7 +443,7 @@ Create a handit_service.js file to initialize the Handit.ai tracker:
  * Handit.ai service initialization.
  */
 import { config } from '@handit.ai/node';
- 
+
 // Configure Handit.ai with your API key
 config({ 
     apiKey: process.env.HANDIT_API_KEY  // Sets up authentication for Handit.ai services
@@ -379,20 +453,22 @@ config({
 
 The example uses three main Handit.ai tracing functions:
 
-startTracing({ agentName }): Starts a new trace session
-- agentName: The name of your AI Application
+1. startTracing({ agentName }): Starts a new trace session
+   - agentName: The name of your AI Application
 
-trackNode({ input, output, nodeName, agentName, nodeType, executionId }): Records individual operations
-- input: The input data for the operation (e.g., user message)
-- output: The result of the operation (e.g., generated response)
-- nodeName: Unique identifier for this operation (e.g., "response_generator")
-- agentName: Name of your agent AI Application
-- nodeType: Type of operation ("llm" for language model, "tool" for functions)
-- executionId: ID from startTracing to link operations together
+2. trackNode({ input, output, nodeName, agentName, nodeType, executionId }): Records individual operations
+   - input: The input data for the operation (object format):
+     - For LLM nodes: {systemPrompt: "...", userPrompt: "...", extraDetails: {...}}
+     - For tool nodes: {toolName: "...", parameters: {...}, extraDetails: {...}}
+   - output: The result of the operation (e.g., generated response)
+   - nodeName: Unique identifier for this operation (e.g., "response_generator")
+   - agentName: Name of your agent AI Application
+   - nodeType: Type of operation ("llm" for language model, "tool" for functions)
+   - executionId: ID from startTracing to link operations together
 
-endTracing({ executionId, agentName }): Ends the trace session
-- executionId: The ID from startTracing to end
-- agentName: Must match the name used in startTracing
+3. endTracing({ executionId, agentName }): Ends the trace session
+   - executionId: The ID from startTracing
+   - agentName: Must match the name used in startTracing
 
 Complete example:
 
@@ -401,36 +477,106 @@ Complete example:
  */
 import { startTracing, trackNode, endTracing } from '@handit.ai/node';
 import { ChatOpenAI } from 'langchain/chat_models';
- 
+
 class CustomerServiceAgent {
     constructor() {
         // Initialize LLM for response generation
         this.llm = new ChatOpenAI({ model: 'gpt-4' });
     }
- 
-    async generateResponse(userMessage) {
-        const prompt = \`Generate a helpful response to: \${userMessage}\`;
+
+    async generateResponse(userMessage, context, executionId) {
+        // Include context directly in the system prompt
+        const contextText = context.similarDocuments.map(doc => doc.content).join('\n');
+        const systemPrompt = \`You are a helpful customer service agent. Use the provided context to give accurate information about our company.\n\nCompany Context: \${contextText}\`;
+        
         try {
-            const response = await this.llm.generate([prompt]);
-            return response.generations[0][0].text;
+            const response = await this.llm.generate([systemPrompt + \`\n\nUser Question: \${userMessage}\`]);
+            const generatedText = response.generations[0][0].text;
+            
+            // Track the LLM call with Handit.ai
+            await trackNode({
+                input: {
+                    systemPrompt,
+                    userPrompt: userMessage,
+                    extraDetails: {
+                        model: "gpt-4",
+                        temperature: 0.7,
+                        context_included: true,
+                        context_documents: context.similarDocuments.length
+                    }
+                },
+                output: generatedText,
+                nodeName: 'response_generator',
+                agentName: 'customer_service_agent',
+                nodeType: 'llm',
+                executionId
+            });
+            
+            return generatedText;
         } catch (error) {
             throw error;
         }
     }
- 
+
+    async getContextFromVectorDb(query, executionId) {
+        try {
+            // Simulating semantic search
+            // const client = new ChromaClient();
+            // const collection = await client.getCollection("company_knowledge");
+            // const results = await collection.query({ queryTexts: [query], nResults: 2 });
+            
+            const results = {
+                query,
+                similarDocuments: [
+                    {
+                        content: "Our AI platform offers automated evaluation, optimization, and real-time monitoring for LLM applications.",
+                        similarityScore: 0.94,
+                        documentId: "features_001"
+                    },
+                    {
+                        content: "We provide SDKs for Python and JavaScript to integrate AI observability into your applications.",
+                        similarityScore: 0.89,
+                        documentId: "features_045"
+                    }
+                ],
+                totalResults: 2
+            };
+            
+            // Track the tool usage with Handit.ai
+            await trackNode({
+                input: {
+                    toolName: "get_context_from_vector_db",
+                    parameters: {
+                        query,
+                        top_k: 2,
+                        similarity_threshold: 0.8
+                    },
+                    extraDetails: {
+                        vector_db: "chroma",
+                        collection: "company_knowledge",
+                        embedding_model: "text-embedding-ada-002"
+                    }
+                },
+                output: results,
+                nodeName: 'vector_context_retriever',
+                agentName: 'customer_service_agent',
+                nodeType: 'tool',
+                executionId
+            });
+            
+            return results;
+        } catch (error) {
+            throw error;
+        }
+    }
+
     async processCustomerRequest(userMessage, executionId) {
         try {
-            // Generate response
-            const response = await this.generateResponse(userMessage);
-            // Track the response generation
-            await trackNode({
-                input: userMessage,           // The original user message
-                output: response,             // The generated response
-                nodeName: 'response_generator', // Unique identifier for this operation
-                agentName: 'customer_service_agent', // Name of this AI Application
-                nodeType: 'llm',              // Indicates this is a language model operation
-                executionId                   // Links this operation to the current trace session
-            });
+            // Extract relevant context from vector database
+            const context = await this.getContextFromVectorDb(userMessage, executionId);
+            
+            // Generate response with context (tracking happens inside generateResponse)
+            const response = await this.generateResponse(userMessage, context, executionId);
             
             return {
                 response
@@ -441,7 +587,7 @@ class CustomerServiceAgent {
         }
     }
 }
- 
+
 async function main() {
     // Initialize the agent
     const agent = new CustomerServiceAgent();
@@ -455,7 +601,7 @@ async function main() {
     try {
         // Process a customer request
         const result = await agent.processCustomerRequest(
-            "I can't access my account",
+            "What AI features does your platform offer for developers?",
             executionId
         );
         console.log('Response:', result.response);
@@ -625,6 +771,7 @@ Congratulations! You now have a complete AI observability and optimization syste
 - Complete visibility into operations
 - Real-time monitoring of all LLM calls and tools
 - Detailed execution traces with timing and error tracking
+- Comprehensive input/output tracking with structured data format
 
 ✅ Continuous Evaluation
 - Automated quality assessment across multiple dimensions
