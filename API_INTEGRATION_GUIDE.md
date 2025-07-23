@@ -80,6 +80,7 @@ The system is pre-configured with these actions:
 
 ### Specialized Flows
 - **Evaluator Connection Flow** - Multi-step guided process for connecting evaluators to models
+- **Optimization Flow** - Run optimization processes based on model and model log ID
 
 ## Usage Examples
 
@@ -98,6 +99,44 @@ curl -X POST http://localhost:3000/api/ai/chat \
 **Response**: Step-by-step documentation and guidance
 
 ### API Mode (When Configured)
+
+### Optimization Endpoint
+
+The system provides a dedicated optimization endpoint for running optimization processes:
+
+```bash
+# Run optimization for a specific model and model log
+curl -X POST https://your-service-url/api/prompt-version/model/{modelId}/prompt/optimize-from-error \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-token" \
+  -d '{
+    "modelLogId": 123
+  }'
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Optimization process finished successfully",
+  "modelId": "model-123",
+  "modelLogId": 123,
+  "optimizationId": "opt-456",
+  "status": "completed",
+  "flags": {
+    "optimization_completed": true,
+    "optimization_success": true,
+    "has_optimization_results": true
+  },
+  "metadata": {
+    "processingTimeMs": 2500,
+    "timestamp": "2024-01-15T10:30:00.000Z",
+    "apiUsed": "user_token"
+  }
+}
+```
+
+**Frontend Integration**: Use the `flags.optimization_completed` and `flags.optimization_success` to update UI state and show success/error messages to users.
 
 ```bash
 # User requests token creation (with API token in Authorization header)

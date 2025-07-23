@@ -57,7 +57,7 @@ async function handleLegacyConversation(req, res) {
         await conversationService.saveMessage(conversation.id, 'assistant', response.answer);
         
         const processingTime = Date.now() - startTime;
-        console.log("🚀 DEPLOYMENT_CHECK: Code version EVALUATOR_FLOW_V2.1 - " + new Date().toISOString());
+        console.log("🚀 DEPLOYMENT_CHECK: Code version EVALUATOR_FLOW_V2.2 - " + new Date().toISOString());
         console.log("process.env.OPENAI_MODEL", process.env.OPENAI_MODEL);
         // Return guided response
         res.json({
@@ -361,7 +361,7 @@ async function getVersionInfo(req, res) {
         }
 
         res.json({
-            deploymentVersion: "EVALUATOR_FLOW_V2.1",
+            deploymentVersion: "EVALUATOR_FLOW_V2.2",
             buildTimestamp: new Date().toISOString(),
             nodeVersion: process.version,
             environment: process.env.NODE_ENV || 'development',
@@ -385,7 +385,8 @@ async function getVersionInfo(req, res) {
                 providerModelSelection: true,
                 handitTokenSupport: true,
                 versionEndpoint: true,
-                buildDebugging: true
+                buildDebugging: true,
+                optimizationFlow: true
             }
         });
 

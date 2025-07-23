@@ -78,6 +78,25 @@
         "defaultIntegrationTokenId": "string",
         "defaultProviderModel": "string"
       }
+    },
+    "run_optimization": {
+      "method": "POST",
+      "endpoint": "/api/prompt-version/model/{modelId}/prompt/optimize-from-error",
+      "description": "Run optimization process based on model and model log ID",
+      "parameters": {
+        "required": ["modelId"]
+      },
+      "requestBody": {
+        "modelLogId": "number"
+      }
+    },
+    "get_optimization_status": {
+      "method": "GET",
+      "endpoint": "/api/optimizations/{optimizationId}",
+      "description": "Get optimization status and results",
+      "parameters": {
+        "required": ["optimizationId"]
+      }
     }
   }
 } 

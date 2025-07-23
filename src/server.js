@@ -29,6 +29,7 @@ require('dotenv').config();
 // Import route modules
 const aiRoutes = require('./routes/ai');
 const healthRoutes = require('./routes/health');
+const optimizationRoutes = require('./routes/optimization');
 
 // Initialize Express application
 const app = express();
@@ -80,6 +81,9 @@ app.use('/api/health', healthRoutes);
 // AI agent routes - main functionality for processing questions
 app.use('/api/ai', aiRoutes);
 
+// Optimization routes - for running optimization processes
+app.use('/api/prompt-version', optimizationRoutes);
+
 // Default route - provides API information and available endpoints
 app.get('/', (req, res) => {
   res.json({
@@ -87,7 +91,8 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: '/api/health',
-      ask: '/api/ai/ask'
+      ask: '/api/ai/ask',
+      optimization: '/api/prompt-version/model/:modelId/prompt/optimize-from-error'
     }
   });
 });
