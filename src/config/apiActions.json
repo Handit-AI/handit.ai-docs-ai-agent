@@ -81,7 +81,7 @@
     },
     "run_optimization": {
       "method": "POST",
-      "endpoint": "/api/prompt-version/model/{modelId}/prompt/optimize-from-error",
+      "endpoint": "/api/prompt-versions/model/{modelId}/prompt/optimize-from-error",
       "description": "Run optimization process based on model and model log ID",
       "parameters": {
         "required": ["modelId"]

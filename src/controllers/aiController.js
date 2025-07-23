@@ -57,7 +57,7 @@ async function handleLegacyConversation(req, res) {
         await conversationService.saveMessage(conversation.id, 'assistant', response.answer);
         
         const processingTime = Date.now() - startTime;
-        console.log("🚀 DEPLOYMENT_CHECK: Code version EVALUATOR_FLOW_V2.2 - " + new Date().toISOString());
+        console.log("🚀 DEPLOYMENT_CHECK: Code version EVALUATOR_FLOW_V2.3 - " + new Date().toISOString());
         console.log("process.env.OPENAI_MODEL", process.env.OPENAI_MODEL);
         // Return guided response
         res.json({
@@ -77,12 +77,15 @@ async function handleLegacyConversation(req, res) {
             customAction: response.customAction, // For frontend UI actions
             evaluators_added: response.evaluators_added, // For evaluator association detection
             custom_evaluator_management: response.custom_evaluator_management, // For evaluator management detection
+            optimization_completed: response.optimization_completed, // For optimization completion detection
+            optimization_success: response.optimization_success, // For optimization success detection
             handitTokenUsed: !!handitToken,
             metadata: {
                 processingTimeMs: processingTime,
                 timestamp: new Date().toISOString(),
                 model: process.env.OPENAI_MODEL || 'gpt-4o-mini'
-            }
+            },
+            ...response,
         });
 
     } catch (error) {
@@ -361,7 +364,7 @@ async function getVersionInfo(req, res) {
         }
 
         res.json({
-            deploymentVersion: "EVALUATOR_FLOW_V2.2",
+            deploymentVersion: "EVALUATOR_FLOW_V2.3",
             buildTimestamp: new Date().toISOString(),
             nodeVersion: process.version,
             environment: process.env.NODE_ENV || 'development',
@@ -386,7 +389,8 @@ async function getVersionInfo(req, res) {
                 handitTokenSupport: true,
                 versionEndpoint: true,
                 buildDebugging: true,
-                optimizationFlow: true
+                optimizationFlow: true,
+                conversationalOptimization: true
             }
         });
 

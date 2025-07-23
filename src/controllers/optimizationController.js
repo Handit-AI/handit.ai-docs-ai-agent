@@ -20,6 +20,12 @@ async function runOptimization(req, res) {
         const { modelId } = req.params;
         const { modelLogId } = req.body;
         
+        // Debug logging for parameter extraction
+        console.log('🔍 DEBUG - Request params:', req.params);
+        console.log('🔍 DEBUG - Request body:', req.body);
+        console.log('🔍 DEBUG - Extracted modelId:', modelId);
+        console.log('🔍 DEBUG - Extracted modelLogId:', modelLogId, 'Type:', typeof modelLogId);
+        
         // Extract Authorization Bearer token from headers
         const authHeader = req.headers.authorization;
         let userApiToken = null;
@@ -39,7 +45,12 @@ async function runOptimization(req, res) {
         if (!modelLogId || typeof modelLogId !== 'number') {
             return res.status(400).json({
                 error: 'Model Log ID is required and must be a number',
-                code: 'INVALID_MODEL_LOG_ID'
+                code: 'INVALID_MODEL_LOG_ID',
+                details: {
+                    received: modelLogId,
+                    type: typeof modelLogId,
+                    body: req.body
+                }
             });
         }
 

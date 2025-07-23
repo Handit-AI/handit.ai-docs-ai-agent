@@ -26,13 +26,8 @@ class OptimizationService {
                 throw new Error('Model ID and Model Log ID are required');
             }
 
-            // Step 2: Check if API is available
-            const apiHealth = await this.apiService.healthCheck();
-            if (!apiHealth.healthy) {
-                throw new Error('External API is not available for optimization');
-            }
-
             // Step 3: Run optimization via API
+            console.log(`🔍 DEBUG - Calling API with modelId: ${modelId}, modelLogId: ${modelLogId}`);
             const optimizationResult = await this.apiService.executeAction(
                 'run_optimization',
                 {
@@ -42,6 +37,7 @@ class OptimizationService {
                 userApiToken
             );
 
+            console.log(`🔍 DEBUG - API Response:`, optimizationResult);
             console.log(`✅ Optimization completed for model: ${modelId}, log: ${modelLogId}`);
 
             return {
